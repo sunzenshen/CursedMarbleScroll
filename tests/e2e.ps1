@@ -1,6 +1,8 @@
 param(
     [Parameter(Mandatory = $true)]
-    [string]$Exe
+    [string]$Exe,
+    [ValidateSet('32', '64')]
+    [int]$ExpectedBits = ([IntPtr]::Size * 8)
 )
 
 $ErrorActionPreference = 'Stop'
@@ -257,7 +259,7 @@ function Move-ToStart {
     }
 }
 
-function Invoke-Gesture([int]$Dx, [int]$Dy, [switch]$XButton) {
+function Invoke-Gesture([int]$Dx, [int]$Dy, [switch]$XButton, [int]$HoldMs = 100) {
     $down = [MouseTestDesktop]::MiddleDown
     $up = [MouseTestDesktop]::MiddleUp
     $data = 0
@@ -272,7 +274,7 @@ function Invoke-Gesture([int]$Dx, [int]$Dy, [switch]$XButton) {
     $beforeRelease = $null
     [MouseTestDesktop]::Button($down, $data)
     try {
-        Start-Sleep -Milliseconds 100
+        Start-Sleep -Milliseconds $HoldMs
         if ($Dx -eq 0 -and $Dy -eq 0) {
             $beforeRelease = $desktop.ReadCounts($false)
         }
@@ -304,11 +306,11 @@ function Write-Result([string]$Name, [bool]$Passed, [string]$Details) {
     Write-Host "$status $Name - $Details"
 }
 
-function Test-Gesture([string]$Name, [int]$Dx, [int]$Dy, [scriptblock]$Check, [switch]$XButton) {
+function Test-Gesture([string]$Name, [int]$Dx, [int]$Dy, [scriptblock]$Check, [switch]$XButton, [int]$HoldMs = 100) {
     try {
         Move-ToStart
         $null = $desktop.ReadCounts($true)
-        $result = Invoke-Gesture $Dx $Dy -XButton:$XButton
+        $result = Invoke-Gesture $Dx $Dy -XButton:$XButton -HoldMs $HoldMs
         $passed = & $Check $result.Counts $result
         $details = "$($result.Counts), max cursor movement=$($result.MaxMovement) px"
         if ($null -ne $result.BeforeRelease) {
@@ -328,6 +330,8 @@ function Start-MarbleScroll([string]$Options) {
     if (-not $app.WaitForInputIdle(10000) -or $app.HasExited) {
         throw 'MarbleScroll did not start its message loop.'
     }
+    # A process with two message loops can report idle before both have started.
+    Start-Sleep -Milliseconds 100
 }
 
 function Send-MiddleClick {
@@ -355,6 +359,21 @@ try {
     $exePath = (Resolve-Path -LiteralPath $Exe).ProviderPath
     if (Get-Process -Name MarbleScroll -ErrorAction SilentlyContinue) {
         throw 'Exit the running MarbleScroll instance before starting the test.'
+    }
+
+    $layout = Start-Process -FilePath $exePath -ArgumentList "--check-native-layouts $ExpectedBits" -PassThru
+    try {
+        if (-not $layout.WaitForExit(2000)) {
+            Stop-Process -InputObject $layout -Force
+            throw 'Native layout check did not exit.'
+        }
+        if ($layout.ExitCode -ne 0) {
+            throw "Native INPUT or MSLLHOOKSTRUCT layout did not match the $ExpectedBits-bit expectation."
+        }
+        Write-Result 'Native input layouts' $true "$ExpectedBits-bit app"
+    }
+    finally {
+        $layout.Dispose()
     }
 
     $baselineName = 'Baseline without MarbleScroll'
@@ -435,6 +454,30 @@ try {
             [Math]::Abs($counts.VerticalTotal - $expected) -le 48 -and $gesture.MaxMovement -le 3
     }
 
+    $results += Test-Gesture 'A long stationary middle press still replays one click' 0 0 {
+        param($counts, $gesture)
+        $gesture.BeforeRelease.MiddleDown -eq 0 -and $gesture.BeforeRelease.MiddleUp -eq 0 -and
+            $counts.MiddleDown -eq 1 -and $counts.MiddleUp -eq 1 -and $counts.VerticalTotal -eq 0
+    } -HoldMs 1000
+
+    $results += Test-Gesture 'Mostly vertical diagonal drag snaps to vertical' 24 $vertical {
+        param($counts, $gesture)
+        $counts.WheelDown -ge 1 -and $counts.HorizontalTotal -eq 0 -and
+            $counts.HWheelRight -eq 0 -and $counts.OtherWheel -eq 0 -and $gesture.MaxMovement -le 3
+    }
+
+    $second = Start-Process -FilePath $exePath -ArgumentList '--defaults' -PassThru
+    try {
+        $secondExited = $second.WaitForExit(2000)
+        $singleInstance = $secondExited -and $second.ExitCode -eq 0 -and -not $app.HasExited
+        Write-Result 'Second instance exits while the first stays running' $singleInstance "exited=$secondExited"
+        $results += $singleInstance
+    }
+    finally {
+        if (-not $second.HasExited) { Stop-Process -InputObject $second -Force }
+        $second.Dispose()
+    }
+
     Stop-MarbleScroll
     $results += Test-Gesture 'Middle drag after stopping MarbleScroll' 0 $vertical {
         param($counts, $gesture)
@@ -495,6 +538,58 @@ try {
         $unlockedCounts.MiddleDown -eq 0 -and $unlockedCounts.MiddleUp -eq 0
     Write-Result 'One click unlocks and restores pointer movement' $unlocked "$unlockedCounts, cursor moved $unlockedMovement px"
     $results += $unlocked
+
+    Stop-MarbleScroll
+    Start-MarbleScroll '--defaults --lock --lock-idle-ms 1500'
+    Move-ToStart
+    $origin = [MouseTestDesktop]::Cursor()
+    $null = $desktop.ReadCounts($true)
+    Send-MiddleClick
+    Send-MiddleClick
+    $desktop.Move($origin.X, $origin.Y + 20)
+    Start-Sleep -Milliseconds 150
+    $beforeIdle = $desktop.ReadCounts($false)
+    Start-Sleep -Milliseconds 1500
+    $desktop.Move($origin.X, $origin.Y + 40)
+    Start-Sleep -Milliseconds 150
+    $afterIdle = $desktop.ReadCounts($false)
+    $idleMovement = Get-CursorDistance $origin ([MouseTestDesktop]::Cursor())
+    $idle = $beforeIdle.VerticalTotal -lt 0 -and $beforeIdle.MiddleDown -eq 0 -and
+        $afterIdle.VerticalTotal -eq $beforeIdle.VerticalTotal -and $idleMovement -ge 37
+    Write-Result 'Locked scroll expires after the configured idle timeout' $idle "$afterIdle, cursor moved $idleMovement px"
+    $results += $idle
+
+    Stop-MarbleScroll
+    Start-MarbleScroll '--defaults --paused'
+    $normalInput = {
+        param($counts, $gesture)
+        $gesture.MaxMovement -ge ($vertical - 3) -and $counts.MiddleDown -eq 1 -and
+            $counts.MiddleUp -eq 1 -and $counts.VerticalTotal -eq 0 -and $counts.HorizontalTotal -eq 0
+    }
+    $results += Test-Gesture 'Pause passes a middle drag through' 0 $vertical $normalInput
+    $results += Test-Gesture 'Pause passes a back-button drag through' 0 $vertical {
+        param($counts, $gesture)
+        $gesture.MaxMovement -ge ($vertical - 3) -and $counts.XDown -eq 1 -and
+            $counts.XUp -eq 1 -and $counts.VerticalTotal -eq 0 -and $counts.HorizontalTotal -eq 0
+    } -XButton
+
+    Stop-MarbleScroll
+    Start-MarbleScroll '--defaults --exit-after-ms 1200'
+    Move-ToStart
+    [MouseTestDesktop]::Button([MouseTestDesktop]::MiddleDown, 0)
+    try {
+        $desktop.Move($startX, $startY + 20)
+        $exited = $app.WaitForExit(2000)
+    }
+    finally {
+        [MouseTestDesktop]::Button([MouseTestDesktop]::MiddleUp, 0)
+    }
+    $graceful = $exited -and $app.ExitCode -eq 0
+    Write-Result 'Graceful tray exit within 2 seconds' $graceful "exited=$exited"
+    $results += $graceful
+    if ($graceful) {
+        $results += Test-Gesture 'Input is normal after graceful exit' 0 $vertical $normalInput
+    }
 
     $failed = $results -contains $false
 }

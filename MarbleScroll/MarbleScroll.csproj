@@ -57,7 +57,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Global.cs" />
+    <Compile Include="ScrollOptions.cs" />
     <Compile Include="MarbleForm.cs">
       <SubType>Form</SubType>
     </Compile>

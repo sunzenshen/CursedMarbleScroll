@@ -11,27 +11,40 @@ permissions:
 jobs:
   build:
     runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            platform: AnyCPU
+            bits: 64
+          - arch: x86
+            platform: x86
+            bits: 32
     steps:
-      - uses: actions/checkout@v7
-      - uses: microsoft/setup-msbuild@v3
-      - run: msbuild MarbleScroll.sln /p:Configuration=Release /m /warnaserror
-      - uses: actions/upload-artifact@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          name: MarbleScroll
-          path: |
-            MarbleScroll/bin/Release/MarbleScroll.exe
-            MarbleScroll/bin/Release/MarbleScroll.exe.config
-            MarbleScroll/bin/Release/LICENSE
-          if-no-files-found: error
+          persist-credentials: false
+      - uses: microsoft/setup-msbuild@30375c66a4eea26614e0d39710365f22f8b0af57 # v3
+      - run: msbuild MarbleScroll.sln /p:Configuration=Release /p:PlatformTarget=${{ matrix.platform }} /m /warnaserror
       - name: Test scroll engine
         run: |
-          msbuild tests/ScrollEngineTests.csproj /p:Configuration=Release /warnaserror
+          msbuild tests/ScrollEngineTests.csproj /p:Configuration=Release /p:PlatformTarget=${{ matrix.platform }} /warnaserror
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & .\tests\bin\Release\ScrollEngineTests.exe
           exit $LASTEXITCODE
       - name: Test mouse hook
         timeout-minutes: 5
-        run: powershell -NoProfile -ExecutionPolicy Bypass -File tests/e2e.ps1 -Exe MarbleScroll/bin/Release/MarbleScroll.exe
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File tests/e2e.ps1 -Exe MarbleScroll/bin/Release/MarbleScroll.exe -ExpectedBits ${{ matrix.bits }}
+      - name: Stage tested files
+        run: |
+          New-Item -ItemType Directory -Path artifact
+          Copy-Item MarbleScroll/bin/Release/MarbleScroll.exe, MarbleScroll/bin/Release/MarbleScroll.exe.config, LICENSE, README.md artifact/
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: MarbleScroll-${{ matrix.arch }}
+          path: artifact/
+          if-no-files-found: error
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')
@@ -40,17 +53,20 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          name: MarbleScroll
+          name: MarbleScroll-x64
           path: release
-      - name: Zip build artifact
-        working-directory: release
+      - name: Zip build artifact and checksum
         env:
           RELEASE_TAG: ${{ github.ref_name }}
-        run: zip "../MarbleScroll-${RELEASE_TAG}.zip" MarbleScroll.exe MarbleScroll.exe.config LICENSE
-      - uses: softprops/action-gh-release@v3
+        run: |
+          (cd release && zip "../MarbleScroll-${RELEASE_TAG}.zip" MarbleScroll.exe MarbleScroll.exe.config LICENSE README.md)
+          sha256sum -- "MarbleScroll-${RELEASE_TAG}.zip" > SHA256SUMS.txt
+      - uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3.0.4
         with:
-          files: MarbleScroll-${{ github.ref_name }}.zip
+          files: |
+            MarbleScroll-${{ github.ref_name }}.zip
+            SHA256SUMS.txt
           fail_on_unmatched_files: true
           generate_release_notes: true

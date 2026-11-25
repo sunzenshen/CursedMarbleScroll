@@ -55,19 +55,23 @@ namespace MarbleScroll
         public double HorizontalSensitivity { get; set; } = 1;
         public double VerticalSensitivity { get; set; } = 1;
         public double MovementThreshold { get; set; } = 2;
-        public double HoldDurationMs { get; set; } = 300;
         public double? DoubleClickIntervalMs { get; set; }
         public bool Reverse { get; set; }
         public bool Acceleration { get; set; }
         public bool LockEnabled { get; set; }
+        public bool SnapToAxis { get; set; }
     }
 
     internal sealed class ScrollEngine
     {
-        private readonly double speed, horizontal, vertical, threshold, holdMs, doubleClickMs;
+        private readonly double horizontal, vertical, threshold, doubleClickMs;
         private readonly bool acceleration;
         private readonly HashSet<ScrollButton> consumedDowns = new HashSet<ScrollButton>();
-        private bool reverse, lockEnabled;
+        private bool reverse, lockEnabled, snapToAxis;
+        private double speed, motionX, motionY;
+        private Axis axis;
+
+        private enum Axis { None, Horizontal, Vertical }
         private double? lastTime;
         private double firstDown, travel, pendingX, pendingY, remainderX, remainderY;
         private ScrollButton trigger;
@@ -77,8 +81,6 @@ namespace MarbleScroll
         {
             get
             {
-                if (State == ScrollState.ButtonPressed)
-                    return firstDown + holdMs;
                 if (State == ScrollState.WaitingForSecondClick)
                     return firstDown + doubleClickMs + 0.001; // Second down at the boundary still locks.
                 return null;
@@ -91,16 +93,30 @@ namespace MarbleScroll
             horizontal = Bound(settings.HorizontalSensitivity, 0, 5, 1);
             vertical = Bound(settings.VerticalSensitivity, 0, 5, 1);
             threshold = Bound(settings.MovementThreshold, 0, 30, 2);
-            holdMs = Bound(settings.HoldDurationMs, 50, 1000, 300);
             doubleClickMs = settings.DoubleClickIntervalMs.HasValue
                 ? Bound(settings.DoubleClickIntervalMs.Value, 150, 1500, 500)
                 : Bound(systemDoubleClickMs, 1, 5000, 500);
             reverse = settings.Reverse;
             acceleration = settings.Acceleration;
             lockEnabled = settings.LockEnabled;
+            snapToAxis = settings.SnapToAxis;
         }
 
         public bool IsTrigger(ScrollButton button) { return button != ScrollButton.None && trigger == button; }
+
+        public void SetMotionOptions(double value, bool snap)
+        {
+            if (speed != value || snapToAxis != snap)
+                remainderX = remainderY = 0;
+            if (snapToAxis != snap)
+                axis = Axis.None;
+            speed = value;
+            snapToAxis = snap;
+        }
+
+        public bool Owns(ScrollButton button) { return consumedDowns.Contains(button); }
+
+        public void ForgetDown(ScrollButton button) { consumedDowns.Remove(button); }
 
         public void SetReverse(bool value)
         {
@@ -137,6 +153,7 @@ namespace MarbleScroll
             else if (State == ScrollState.WaitingForSecondClick && IsTrigger(button))
             {
                 State = ScrollState.LockedScroll;
+                ResetMotion();
             }
             else
             {
@@ -146,6 +163,7 @@ namespace MarbleScroll
                 trigger = button;
                 firstDown = timeMs;
                 travel = pendingX = pendingY = 0;
+                ResetMotion();
             }
             return new ScrollDecision(DecisionKind.Suppress, replayButton: replay);
         }
@@ -196,6 +214,8 @@ namespace MarbleScroll
                     break;
                 case ScrollState.ButtonPressed:
                     travel += Distance(dx, dy);
+                    motionX += Math.Abs(dx);
+                    motionY += Math.Abs(dy);
                     pendingX += dx;
                     pendingY += dy;
                     if (travel < threshold)
@@ -203,8 +223,9 @@ namespace MarbleScroll
                     State = ScrollState.TemporaryScroll;
                     return FlushMotion(0, 0);
                 case ScrollState.TemporaryScroll:
-                    return FlushMotion(dx, dy);
                 case ScrollState.LockedScroll:
+                    motionX += Math.Abs(dx);
+                    motionY += Math.Abs(dy);
                     return Convert(dx, dy);
             }
             return new ScrollDecision(DecisionKind.Pass, replayButton: replay);
@@ -228,8 +249,6 @@ namespace MarbleScroll
             }
 
             lastTime = timeMs;
-            if (State == ScrollState.ButtonPressed && timeMs - firstDown >= holdMs)
-                State = ScrollState.TemporaryScroll;
             if (State == ScrollState.WaitingForSecondClick && timeMs - firstDown > doubleClickMs)
                 replay = FinishWaiting(DecisionKind.Pass).ReplayButton;
             return true;
@@ -241,13 +260,19 @@ namespace MarbleScroll
             return new ScrollDecision(kind, replayButton: trigger);
         }
 
-        private void Reset()
+        public void Reset()
         {
             State = ScrollState.Normal;
             lastTime = null;
-            consumedDowns.Clear();
             trigger = ScrollButton.None;
-            travel = pendingX = pendingY = remainderX = remainderY = 0;
+            travel = pendingX = pendingY = 0;
+            ResetMotion();
+        }
+
+        private void ResetMotion()
+        {
+            axis = Axis.None;
+            motionX = motionY = remainderX = remainderY = 0;
         }
 
         private ScrollDecision FlushMotion(double dx, double dy)
@@ -259,6 +284,21 @@ namespace MarbleScroll
 
         private ScrollDecision Convert(double dx, double dy)
         {
+            if (snapToAxis)
+            {
+                if (axis == Axis.None)
+                    axis = motionX > motionY ? Axis.Horizontal : Axis.Vertical;
+                else if (axis == Axis.Horizontal && motionY > 3 * motionX)
+                    axis = Axis.Vertical;
+                else if (axis == Axis.Vertical && motionX > 3 * motionY)
+                    axis = Axis.Horizontal;
+
+                if (axis == Axis.Horizontal)
+                    dy = remainderY = 0;
+                else
+                    dx = remainderX = 0;
+            }
+
             double x = Clamp(dx, -4096, 4096);
             double y = Clamp(dy, -4096, 4096);
             double gain = acceleration ? Math.Min(4, 1 + Distance(x, y) / 100) : 1;

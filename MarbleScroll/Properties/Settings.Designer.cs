@@ -74,5 +74,29 @@ namespace MarbleScroll.Properties
             get { return (bool)this["Reverse"]; }
             set { this["Reverse"] = value; }
         }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("True")]
+        public bool SnapToAxis
+        {
+            get { return (bool)this["SnapToAxis"]; }
+            set { this["SnapToAxis"] = value; }
+        }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool Paused
+        {
+            get { return (bool)this["Paused"]; }
+            set { this["Paused"] = value; }
+        }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("1")]
+        public string ScrollSpeed
+        {
+            get { return (string)this["ScrollSpeed"]; }
+            set { this["ScrollSpeed"] = value; }
+        }
     }
 }

@@ -10,6 +10,8 @@ internal static class ScrollEngineTests
         try
         {
             ThresholdAndHold();
+            DominantAxis();
+            ResetKeepsButtonOwnership();
             DirectionsAndSensitivity();
             RemaindersAndBounds();
             ClickTiming();
@@ -55,7 +57,7 @@ internal static class ScrollEngineTests
         var engine = Engine();
         Equal(DecisionKind.Pass, engine.Move(5, 5, 0).Kind, "normal pointer");
         engine.ButtonDown(Middle, 1);
-        Equal(301.0, engine.PendingDeadlineMs.Value, "hold deadline");
+        Equal(false, engine.PendingDeadlineMs.HasValue, "no hold deadline");
         Equal(DecisionKind.Suppress, engine.Move(1, 0, 2).Kind, "buffer jitter");
         Units(engine.Move(1, 0, 3), 2, 0, "threshold flushes the buffer");
         Equal(DecisionKind.Suppress, engine.ButtonUp(Middle, 4).Kind, "scroll release");
@@ -64,11 +66,42 @@ internal static class ScrollEngineTests
         engine.ButtonDown(Middle, 10);
         engine.Move(1, 0, 11);
         engine.Tick(310);
-        Equal(ScrollState.TemporaryScroll, engine.State, "hold activates scrolling");
+        Equal(ScrollState.ButtonPressed, engine.State, "hold alone does not activate scrolling");
         Units(engine.Move(1, 0, 311), 2, 0, "hold keeps the buffer");
         engine.ButtonUp(Middle, 312);
         engine.ButtonDown(Middle, 400);
-        Equal(DecisionKind.Suppress, engine.ButtonUp(Middle, 700).Kind, "exact hold boundary suppresses click");
+        Equal(DecisionKind.ReplayClick, engine.ButtonUp(Middle, 1400).Kind, "long stationary hold replays click");
+
+        engine = Engine(true);
+        engine.ButtonDown(Middle, 0);
+        Equal(DecisionKind.ReplayClick, engine.ButtonUp(Middle, 1000).Kind,
+            "long stationary hold also replays with lock enabled");
+    }
+
+    private static void DominantAxis()
+    {
+        var engine = new ScrollEngine(new ScrollSettings { SnapToAxis = true }, 500);
+        engine.ButtonDown(Middle, 0);
+        Equal(DecisionKind.Suppress, engine.Move(0.5, 0.5, 1).Kind, "buffer before axis choice");
+        Units(engine.Move(0.5, 2.5, 2), 0, -12, "vertical wins from accumulated motion");
+        Units(engine.Move(8, 1, 3), 0, -4, "horizontal stays below three times accumulated vertical");
+        Units(engine.Move(3, 0, 4), 0, 0, "three times exactly keeps the axis");
+        Units(engine.Move(1, 0, 5), 1, 0, "horizontal exceeds three times accumulated vertical");
+        engine.ButtonUp(Middle, 6);
+        engine.ButtonDown(Middle, 7);
+        Units(engine.Move(1, 3, 8), 0, -12, "new gesture chooses its own axis");
+    }
+
+    private static void ResetKeepsButtonOwnership()
+    {
+        var engine = Engine();
+        engine.ButtonDown(Middle, 0);
+        engine.Move(0, 10, 1);
+        engine.Reset();
+        Equal(DecisionKind.Pass, engine.Move(0, 10, 2).Kind, "reset restores pointer");
+        Equal(DecisionKind.Suppress, engine.ButtonUp(Middle, 3).Kind, "reset still pairs the consumed down");
+        Equal(DecisionKind.Pass, engine.ButtonUp(Middle, 4).Kind, "ownership is released");
+        Equal(DecisionKind.ReplayClick, Click(engine, 5).Kind, "next stationary click replays");
     }
 
     private static void DirectionsAndSensitivity()
@@ -100,6 +133,10 @@ internal static class ScrollEngineTests
         }
         Equal(25, x, "horizontal remainder");
         Equal(-25, y, "vertical remainder");
+        engine.Move(3, 0.75, 101);
+        engine.ButtonUp(Middle, 102);
+        engine.ButtonDown(Middle, 103);
+        Units(engine.Move(1, 0.25, 104), 0, 0, "fractional units do not carry into the next gesture");
 
         settings = new ScrollSettings { Acceleration = true };
         engine = new ScrollEngine(settings, 500);
