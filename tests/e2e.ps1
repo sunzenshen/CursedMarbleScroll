@@ -34,7 +34,7 @@ public sealed class MouseTestDesktop : IDisposable
 
     private sealed class MouseForm : Form
     {
-        public Counts Events = new Counts();
+        public Counts MouseCounts = new Counts();
 
         protected override void WndProc(ref Message message)
         {
@@ -42,18 +42,18 @@ public sealed class MouseTestDesktop : IDisposable
             switch (message.Msg)
             {
                 case 0x020A: // WM_MOUSEWHEEL
-                    if (delta == 200) Events.WheelUp++;
-                    else if (delta == -200) Events.WheelDown++;
-                    else Events.OtherWheel++;
+                    if (delta == 200) MouseCounts.WheelUp++;
+                    else if (delta == -200) MouseCounts.WheelDown++;
+                    else MouseCounts.OtherWheel++;
                     break;
                 case 0x020E: // WM_MOUSEHWHEEL
-                    if (delta == 200) Events.HWheelRight++;
-                    else Events.OtherWheel++;
+                    if (delta == 200) MouseCounts.HWheelRight++;
+                    else MouseCounts.OtherWheel++;
                     break;
-                case 0x0207: Events.MiddleDown++; break;
-                case 0x0208: Events.MiddleUp++; break;
-                case 0x020B: Events.XDown++; break;
-                case 0x020C: Events.XUp++; break;
+                case 0x0207: MouseCounts.MiddleDown++; break;
+                case 0x0208: MouseCounts.MiddleUp++; break;
+                case 0x020B: MouseCounts.XDown++; break;
+                case 0x020C: MouseCounts.XUp++; break;
             }
             base.WndProc(ref message);
         }
@@ -167,10 +167,10 @@ public sealed class MouseTestDesktop : IDisposable
         return (Counts)form.Invoke(new Func<Counts>(delegate
         {
             if (!reset)
-                return form.Events.Snapshot();
+                return form.MouseCounts.Snapshot();
             // Reset on the window thread, where all mouse messages are counted.
-            Counts previous = form.Events;
-            form.Events = new Counts();
+            Counts previous = form.MouseCounts;
+            form.MouseCounts = new Counts();
             return previous;
         }));
     }
@@ -199,6 +199,8 @@ public sealed class MouseTestDesktop : IDisposable
         input.Mouse.Data = data;
         input.Mouse.X = x;
         input.Mouse.Y = y;
+        input.Mouse.Time = 0; // Let Windows supply the timestamp.
+        input.Mouse.ExtraInfo = UIntPtr.Zero;
         if (SendInput(1, ref input, Marshal.SizeOf(typeof(Input))) != 1)
             throw new Win32Exception(Marshal.GetLastWin32Error(), "SendInput failed.");
     }
