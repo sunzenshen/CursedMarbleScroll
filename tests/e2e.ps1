@@ -330,8 +330,31 @@ function Start-MarbleScroll([string]$Options) {
     if (-not $app.WaitForInputIdle(10000) -or $app.HasExited) {
         throw 'MarbleScroll did not start its message loop.'
     }
-    # A process with two message loops can report idle before both have started.
-    Start-Sleep -Milliseconds 100
+}
+
+function Wait-MarbleScrollHook {
+    $timer = [System.Diagnostics.Stopwatch]::StartNew()
+    while ($timer.ElapsedMilliseconds -lt 3000 -and -not $app.HasExited) {
+        Move-ToStart
+        $null = $desktop.ReadCounts($true)
+        [MouseTestDesktop]::Button([MouseTestDesktop]::MiddleDown, 0)
+        try {
+            $desktop.Move($startX, $startY + 24)
+        }
+        finally {
+            [MouseTestDesktop]::Button([MouseTestDesktop]::MiddleUp, 0)
+        }
+
+        $attempt = [System.Diagnostics.Stopwatch]::StartNew()
+        do {
+            $counts = $desktop.ReadCounts($false)
+            if ($counts.WheelDown -gt 0) {
+                return
+            }
+            Start-Sleep -Milliseconds 20
+        } while ($attempt.ElapsedMilliseconds -lt 150 -and $timer.ElapsedMilliseconds -lt 3000)
+    }
+    throw 'MarbleScroll did not produce a wheel event in the startup readiness probe.'
 }
 
 function Send-MiddleClick {
@@ -407,6 +430,7 @@ try {
     }
 
     Start-MarbleScroll '--defaults'
+    Wait-MarbleScrollHook
 
     $results = @(
         Test-Gesture 'Middle drag down (negative wheel, swallowed)' 0 $vertical {

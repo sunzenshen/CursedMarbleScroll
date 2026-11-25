@@ -13,6 +13,7 @@ namespace MarbleScroll
     {
         private const uint InjectedFlag = 1;
         private const int QueueLimit = 64;
+        private const int HookStartupTimeoutMs = 5000;
         private static readonly UIntPtr OutputMarker = new UIntPtr(
             unchecked(0x4D534352u ^ (uint)Process.GetCurrentProcess().Id));
         private static readonly int InputSize = Marshal.SizeOf(typeof(Input));
@@ -23,6 +24,8 @@ namespace MarbleScroll
         private readonly int doubleClickMs = SystemInformation.DoubleClickTime;
         private readonly Thread hookThread, worker;
         private readonly ManualResetEventSlim ready = new ManualResetEventSlim();
+        private Exception startupError;
+        private volatile Exception hookFailure;
         private volatile Control dispatcher;
         private volatile bool stopping, outputFailed, senderUnavailable;
         private volatile int forwardedButtons;
@@ -51,6 +54,10 @@ namespace MarbleScroll
             worker = new Thread(EmitOutput) { IsBackground = true, Name = "MarbleScroll output" };
         }
 
+        public event Action HookFailed;
+
+        public Exception HookFailure { get { return hookFailure; } }
+
         public ScrollState State { get { return state; } }
 
         public static bool CheckNativeLayouts(int expectedBits)
@@ -62,10 +69,20 @@ namespace MarbleScroll
 
         public void Start()
         {
-            worker.Start();
-            hookThread.Start();
-            if (!ready.Wait(1000))
-                Debug.WriteLine("MarbleScroll hook startup has not completed.");
+            try
+            {
+                worker.Start();
+                hookThread.Start();
+                if (!ready.Wait(HookStartupTimeoutMs))
+                    throw new TimeoutException("Timed out while installing the mouse hook.");
+                if (startupError != null)
+                    throw new InvalidOperationException("Could not start the mouse hook.", startupError);
+            }
+            catch
+            {
+                Stop();
+                throw;
+            }
         }
 
         public void Stop()
@@ -85,10 +102,18 @@ namespace MarbleScroll
             Post(() =>
             {
                 ResetGesture();
-                if (reinstall && RemoveHook())
+                if (reinstall)
                 {
-                    forwardedButtons = 0;
-                    InstallHook();
+                    try
+                    {
+                        RemoveHook();
+                        forwardedButtons = 0;
+                        InstallHook();
+                    }
+                    catch (Exception error)
+                    {
+                        ReportHookFailure(new InvalidOperationException("Could not reinstall the mouse hook.", error));
+                    }
                 }
             });
         }
@@ -139,30 +164,32 @@ namespace MarbleScroll
 
         private void RunHook()
         {
+            bool started = false;
             try
             {
+                engine = new ScrollEngine(new ScrollSettings
+                {
+                    LockEnabled = options.LockEnabled,
+                    Reverse = options.Reverse,
+                    Speed = options.Speed,
+                    SnapToAxis = options.SnapToAxis
+                }, doubleClickMs);
+                if (stopping)
+                    throw new OperationCanceledException("Mouse hook startup was canceled.");
+                // Install before WinForms creates the hook thread's marshaling window.
+                InstallHook();
+
                 using (var control = new Control())
                 using (var context = new ApplicationContext())
                 using (var timer = new Timer { Interval = 20 })
                 {
-                    // Create the marshaling handle on the same STA that owns the hook.
                     control.CreateControl();
-                    dispatcher = control;
-                    engine = new ScrollEngine(new ScrollSettings
-                    {
-                        LockEnabled = options.LockEnabled,
-                        Reverse = options.Reverse,
-                        Speed = options.Speed,
-                        SnapToAxis = options.SnapToAxis
-                    }, doubleClickMs);
-                    InstallHook();
                     timer.Tick += (sender, args) =>
                     {
                         Guard(() =>
                         {
                             if (stopping)
                             {
-                                RemoveHook();
                                 context.ExitThread();
                             }
                             else
@@ -172,6 +199,8 @@ namespace MarbleScroll
                         });
                     };
                     timer.Start();
+                    dispatcher = control;
+                    started = true;
                     ready.Set();
                     if (!stopping)
                         Application.Run(context);
@@ -179,38 +208,56 @@ namespace MarbleScroll
             }
             catch (Exception error)
             {
-                Debug.WriteLine(error);
-                ResetGesture();
+                if (started)
+                    ReportHookFailure(error);
+                else
+                    startupError = error;
             }
             finally
             {
-                RemoveHook();
                 dispatcher = null;
-                ready.Set();
+                try
+                {
+                    RemoveHook();
+                }
+                catch (Win32Exception error)
+                {
+                    Debug.WriteLine(error);
+                }
+                if (!started)
+                    ready.Set();
             }
+        }
+
+        private void ReportHookFailure(Exception error)
+        {
+            if (stopping)
+                return;
+            hookFailure = error;
+            stopping = true;
+            InvalidateOutput();
+            HookFailed?.Invoke();
         }
 
         private void InstallHook()
         {
             hookID = SetWindowsHookEx(14, hookCallback, GetModuleHandle(null), 0);
             if (hookID == IntPtr.Zero)
-                Debug.WriteLine(new Win32Exception(Marshal.GetLastWin32Error()));
+                throw new Win32Exception(Marshal.GetLastWin32Error());
         }
 
-        private bool RemoveHook()
+        private void RemoveHook()
         {
             if (hookID == IntPtr.Zero)
-                return true;
+                return;
             if (!UnhookWindowsHookEx(hookID))
             {
                 int error = Marshal.GetLastWin32Error();
-                Debug.WriteLine(new Win32Exception(error));
                 // ERROR_INVALID_HOOK_HANDLE also covers removal by the system.
                 if (error != 1404)
-                    return false;
+                    throw new Win32Exception(error);
             }
             hookID = IntPtr.Zero;
-            return true;
         }
 
         private void Guard(Action action)

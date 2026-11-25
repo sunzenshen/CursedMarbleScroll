@@ -43,8 +43,31 @@ namespace MarbleScroll
                     options.Paused = true;
 
                 var scroll = new MarbleScroll(options, ReadPositiveOption(args, "--lock-idle-ms", 10000));
-                RunTrayLoop(scroll, options, ReadPositiveOption(args, "--exit-after-ms", 0));
-                return 0;
+                try
+                {
+                    scroll.Start();
+                    try
+                    {
+                        RunTrayLoop(scroll, options, ReadPositiveOption(args, "--exit-after-ms", 0));
+                    }
+                    finally
+                    {
+                        scroll.Stop();
+                    }
+                    if (scroll.HookFailure != null)
+                        throw scroll.HookFailure;
+                    return 0;
+                }
+                catch (Exception error)
+                {
+                    Debug.WriteLine(error);
+                    string message = error.Message;
+                    Exception cause = error.GetBaseException();
+                    if (cause != error)
+                        message += Environment.NewLine + cause.Message;
+                    MessageBox.Show(message, "MarbleScroll", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return 1;
+                }
             }
         }
 
@@ -79,14 +102,28 @@ namespace MarbleScroll
                 SystemEvents.DisplaySettingsChanged += display;
                 using (var form = new MarbleForm(scroll, options, exitAfterMs))
                 {
+                    // Create the UI marshaling handle before observing hook failures.
+                    _ = form.Handle;
+                    Action hookFailed = () =>
+                    {
+                        try
+                        {
+                            form.BeginInvoke((MethodInvoker)Application.ExitThread);
+                        }
+                        catch (InvalidOperationException)
+                        {
+                            // The tray is already closing. Main still observes the failure.
+                        }
+                    };
+                    scroll.HookFailed += hookFailed;
                     try
                     {
-                        scroll.Start();
-                        Application.Run();
+                        if (scroll.HookFailure == null)
+                            Application.Run();
                     }
                     finally
                     {
-                        scroll.Stop();
+                        scroll.HookFailed -= hookFailed;
                     }
                 }
             }
