@@ -42,7 +42,7 @@ namespace MarbleScroll
         private uint scrollXButton = backButton;
         private bool convertXToMiddleClick = false;
 
-        public bool ConvertXToMiddleClick { get; set; }
+        public bool ConvertXToMiddleClick { get { return convertXToMiddleClick; } set { this.convertXToMiddleClick = value; } }
         public bool EnableMiddleButtonScroll { get; set; }
         public bool EnableXButtonScroll { get; set; }
         public uint ScrollXButton { get { return scrollXButton;  } set { this.scrollXButton = value; } }

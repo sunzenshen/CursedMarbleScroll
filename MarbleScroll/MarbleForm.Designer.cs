@@ -72,6 +72,7 @@
             this.emulateMiddleButtonOnXClickToolStripMenuItem.Name = "emulateMiddleButtonOnXClickToolStripMenuItem";
             this.emulateMiddleButtonOnXClickToolStripMenuItem.Size = new System.Drawing.Size(346, 32);
             this.emulateMiddleButtonOnXClickToolStripMenuItem.Text = "Emulate middle button on X click";
+            this.emulateMiddleButtonOnXClickToolStripMenuItem.CheckedChanged += new System.EventHandler(this.emulateMiddleButtonOnXClickToolStripMenuItem_CheckedChanged);
             // 
             // scrollOnXButtonToolStripMenuItem
             // 

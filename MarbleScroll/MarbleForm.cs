@@ -35,7 +35,7 @@ namespace MarbleScroll
             NotifyIcon trayIcon = new NotifyIcon(components);
             trayIcon.ContextMenuStrip = contextMenuStrip1;
             trayIcon.Icon = (Icon) resources.GetObject("$this.Icon");
-            trayIcon.Text = "Scrolly";
+            trayIcon.Text = "MarbleScroll";
             trayIcon.Visible = true;
         }
 
@@ -58,6 +58,11 @@ namespace MarbleScroll
         private void scrollOnMiddleButtonToolStripMenuItem_CheckedChanged(object sender, EventArgs e)
         {
             Global.marbleScroll.EnableMiddleButtonScroll = scrollOnMiddleButtonToolStripMenuItem.Checked;
+        }
+
+        private void emulateMiddleButtonOnXClickToolStripMenuItem_CheckedChanged(object sender, EventArgs e)
+        {
+            Global.marbleScroll.ConvertXToMiddleClick = emulateMiddleButtonOnXClickToolStripMenuItem.Checked;
         }
 
         private void scrollOnXButtonToolStripMenuItem_CheckedChanged(object sender, EventArgs e)
