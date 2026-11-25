@@ -64,7 +64,6 @@
             this.scrollOnMiddleButtonToolStripMenuItem.Name = "scrollOnMiddleButtonToolStripMenuItem";
             this.scrollOnMiddleButtonToolStripMenuItem.Size = new System.Drawing.Size(346, 32);
             this.scrollOnMiddleButtonToolStripMenuItem.Text = "Scroll on middle Button";
-            this.scrollOnMiddleButtonToolStripMenuItem.CheckedChanged += new System.EventHandler(this.scrollOnMiddleButtonToolStripMenuItem_CheckedChanged);
             // 
             // emulateMiddleButtonOnXClickToolStripMenuItem
             // 
@@ -72,7 +71,6 @@
             this.emulateMiddleButtonOnXClickToolStripMenuItem.Name = "emulateMiddleButtonOnXClickToolStripMenuItem";
             this.emulateMiddleButtonOnXClickToolStripMenuItem.Size = new System.Drawing.Size(346, 32);
             this.emulateMiddleButtonOnXClickToolStripMenuItem.Text = "Emulate middle button on X click";
-            this.emulateMiddleButtonOnXClickToolStripMenuItem.CheckedChanged += new System.EventHandler(this.emulateMiddleButtonOnXClickToolStripMenuItem_CheckedChanged);
             // 
             // scrollOnXButtonToolStripMenuItem
             // 
@@ -82,7 +80,6 @@
             this.scrollOnXButtonToolStripMenuItem.Name = "scrollOnXButtonToolStripMenuItem";
             this.scrollOnXButtonToolStripMenuItem.Size = new System.Drawing.Size(346, 32);
             this.scrollOnXButtonToolStripMenuItem.Text = "Scroll on X-Button ";
-            this.scrollOnXButtonToolStripMenuItem.CheckedChanged += new System.EventHandler(this.scrollOnXButtonToolStripMenuItem_CheckedChanged);
             // 
             // MarbleForm
             // 
@@ -94,7 +91,6 @@
             this.Name = "MarbleForm";
             this.ShowInTaskbar = false;
             this.Text = "MarbleScroll";
-            this.Load += new System.EventHandler(this.MarbleForm_Load);
             this.contextMenuStrip1.ResumeLayout(false);
             this.ResumeLayout(false);
 

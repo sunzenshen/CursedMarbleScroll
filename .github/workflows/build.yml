@@ -21,7 +21,14 @@ jobs:
           path: |
             MarbleScroll/bin/Release/MarbleScroll.exe
             MarbleScroll/bin/Release/MarbleScroll.exe.config
+            MarbleScroll/bin/Release/LICENSE
           if-no-files-found: error
+      - name: Test scroll engine
+        run: |
+          msbuild tests/ScrollEngineTests.csproj /p:Configuration=Release /warnaserror
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & .\tests\bin\Release\ScrollEngineTests.exe
+          exit $LASTEXITCODE
       - name: Test mouse hook
         timeout-minutes: 5
         run: powershell -NoProfile -ExecutionPolicy Bypass -File tests/e2e.ps1 -Exe MarbleScroll/bin/Release/MarbleScroll.exe
@@ -41,7 +48,7 @@ jobs:
         working-directory: release
         env:
           RELEASE_TAG: ${{ github.ref_name }}
-        run: zip "../MarbleScroll-${RELEASE_TAG}.zip" MarbleScroll.exe MarbleScroll.exe.config
+        run: zip "../MarbleScroll-${RELEASE_TAG}.zip" MarbleScroll.exe MarbleScroll.exe.config LICENSE
       - uses: softprops/action-gh-release@v3
         with:
           files: MarbleScroll-${{ github.ref_name }}.zip

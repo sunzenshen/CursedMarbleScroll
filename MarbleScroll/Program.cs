@@ -1,38 +1,39 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 using System.Windows.Forms;
 
 namespace MarbleScroll
 {
     static class Program
     {
-
-        
-
-        /// <summary>
-        /// The main entry point for the application.
-        /// </summary>
         [STAThread]
-        static void Main()
+        static void Main(string[] args)
         {
-            Global.marbleScroll = new MarbleScroll();
-            Global.marbleScroll.FocusWindow = false;
-            Global.marbleScroll.EnableMiddleButtonScroll = true;
-            Global.marbleScroll.EnableXButtonScroll = true;
-            Global.marbleScroll.Start();
-            
+            bool defaults = Array.IndexOf(args, "--defaults") >= 0;
+            var settings = Properties.Settings.Default;
+            Global.marbleScroll = new MarbleScroll
+            {
+                EnableMiddleButtonScroll = defaults || settings.EnableMiddleButtonScroll,
+                EnableXButtonScroll = defaults || settings.EnableXButtonScroll,
+                ConvertXToMiddleClick = !defaults && settings.ConvertXToMiddleClick,
+                SmoothScrolling = (defaults || settings.SmoothScrolling) && Array.IndexOf(args, "--notches") < 0,
+                LockEnabled = Array.IndexOf(args, "--lock") >= 0 || (!defaults && settings.LockEnabled),
+                Reverse = !defaults && settings.Reverse
+            };
+
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
-            Application.ApplicationExit += new EventHandler(Exit);
-            MarbleForm form = new MarbleForm();
-            Application.Run(); 
-        }
-
-        static void Exit(object sender, EventArgs e)
-        {
-            Global.marbleScroll.Stop();
+            using (var form = new MarbleForm())
+            {
+                Global.marbleScroll.Start();
+                try
+                {
+                    Application.Run();
+                }
+                finally
+                {
+                    Global.marbleScroll.Stop();
+                }
+            }
         }
     }
 }

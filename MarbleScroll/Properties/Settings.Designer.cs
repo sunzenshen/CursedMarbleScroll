@@ -26,5 +26,53 @@ namespace MarbleScroll.Properties
                 return defaultInstance;
             }
         }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("True")]
+        public bool EnableMiddleButtonScroll
+        {
+            get { return (bool)this["EnableMiddleButtonScroll"]; }
+            set { this["EnableMiddleButtonScroll"] = value; }
+        }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("True")]
+        public bool EnableXButtonScroll
+        {
+            get { return (bool)this["EnableXButtonScroll"]; }
+            set { this["EnableXButtonScroll"] = value; }
+        }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool ConvertXToMiddleClick
+        {
+            get { return (bool)this["ConvertXToMiddleClick"]; }
+            set { this["ConvertXToMiddleClick"] = value; }
+        }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("True")]
+        public bool SmoothScrolling
+        {
+            get { return (bool)this["SmoothScrolling"]; }
+            set { this["SmoothScrolling"] = value; }
+        }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool LockEnabled
+        {
+            get { return (bool)this["LockEnabled"]; }
+            set { this["LockEnabled"] = value; }
+        }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool Reverse
+        {
+            get { return (bool)this["Reverse"]; }
+            set { this["Reverse"] = value; }
+        }
     }
 }
