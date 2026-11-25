@@ -16,7 +16,7 @@
             Entfernen Sie dieses Element, wenn diese Virtualisierung aus Gründen der Abwärtskompatibilität
             für die Anwendung erforderlich ist.
         -->
-        <requestedExecutionLevel level="highestAvailable" uiAccess="true" />
+        <requestedExecutionLevel level="asInvoker" uiAccess="false" />
       </requestedPrivileges>
     </security>
   </trustInfo>
