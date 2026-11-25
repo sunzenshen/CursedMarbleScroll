@@ -7,23 +7,26 @@
     <Setting Name="EnableMiddleButtonScroll" Type="System.Boolean" Scope="User">
       <Value Profile="(Default)">True</Value>
     </Setting>
-    <Setting Name="EnableXButtonScroll" Type="System.Boolean" Scope="User">
+    <Setting Name="SideButtonsActAsMiddle" Type="System.Boolean" Scope="User">
       <Value Profile="(Default)">True</Value>
     </Setting>
-    <Setting Name="ConvertXToMiddleClick" Type="System.Boolean" Scope="User">
-      <Value Profile="(Default)">False</Value>
+    <Setting Name="SettingsSchemaVersion" Type="System.Int32" Scope="User">
+      <Value Profile="(Default)">0</Value>
+    </Setting>
+    <Setting Name="LockWindowMs" Type="System.Int32" Scope="User">
+      <Value Profile="(Default)">300</Value>
     </Setting>
     <Setting Name="SmoothScrolling" Type="System.Boolean" Scope="User">
       <Value Profile="(Default)">True</Value>
     </Setting>
     <Setting Name="LockEnabled" Type="System.Boolean" Scope="User">
-      <Value Profile="(Default)">False</Value>
+      <Value Profile="(Default)">True</Value>
     </Setting>
     <Setting Name="Reverse" Type="System.Boolean" Scope="User">
       <Value Profile="(Default)">False</Value>
     </Setting>
     <Setting Name="SnapToAxis" Type="System.Boolean" Scope="User">
-      <Value Profile="(Default)">True</Value>
+      <Value Profile="(Default)">False</Value>
     </Setting>
     <Setting Name="Paused" Type="System.Boolean" Scope="User">
       <Value Profile="(Default)">False</Value>

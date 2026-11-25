@@ -33,8 +33,7 @@
             this.contextMenuStrip1 = new System.Windows.Forms.ContextMenuStrip(this.components);
             this.exitToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.scrollOnMiddleButtonToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
-            this.emulateMiddleButtonOnXClickToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
-            this.scrollOnXButtonToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.sideButtonsActAsMiddleToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.contextMenuStrip1.SuspendLayout();
             this.SuspendLayout();
             // 
@@ -44,8 +43,7 @@
             this.contextMenuStrip1.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
             this.exitToolStripMenuItem,
             this.scrollOnMiddleButtonToolStripMenuItem,
-            this.scrollOnXButtonToolStripMenuItem,
-            this.emulateMiddleButtonOnXClickToolStripMenuItem});
+            this.sideButtonsActAsMiddleToolStripMenuItem});
             this.contextMenuStrip1.Name = "contextMenuStrip1";
             this.contextMenuStrip1.Size = new System.Drawing.Size(347, 165);
             // 
@@ -63,23 +61,16 @@
             this.scrollOnMiddleButtonToolStripMenuItem.CheckState = System.Windows.Forms.CheckState.Checked;
             this.scrollOnMiddleButtonToolStripMenuItem.Name = "scrollOnMiddleButtonToolStripMenuItem";
             this.scrollOnMiddleButtonToolStripMenuItem.Size = new System.Drawing.Size(346, 32);
-            this.scrollOnMiddleButtonToolStripMenuItem.Text = "Scroll on middle Button";
+            this.scrollOnMiddleButtonToolStripMenuItem.Text = "Scroll on middle button";
             // 
-            // emulateMiddleButtonOnXClickToolStripMenuItem
+            // sideButtonsActAsMiddleToolStripMenuItem
             // 
-            this.emulateMiddleButtonOnXClickToolStripMenuItem.CheckOnClick = true;
-            this.emulateMiddleButtonOnXClickToolStripMenuItem.Name = "emulateMiddleButtonOnXClickToolStripMenuItem";
-            this.emulateMiddleButtonOnXClickToolStripMenuItem.Size = new System.Drawing.Size(346, 32);
-            this.emulateMiddleButtonOnXClickToolStripMenuItem.Text = "Emulate middle button on X click";
-            // 
-            // scrollOnXButtonToolStripMenuItem
-            // 
-            this.scrollOnXButtonToolStripMenuItem.Checked = true;
-            this.scrollOnXButtonToolStripMenuItem.CheckOnClick = true;
-            this.scrollOnXButtonToolStripMenuItem.CheckState = System.Windows.Forms.CheckState.Checked;
-            this.scrollOnXButtonToolStripMenuItem.Name = "scrollOnXButtonToolStripMenuItem";
-            this.scrollOnXButtonToolStripMenuItem.Size = new System.Drawing.Size(346, 32);
-            this.scrollOnXButtonToolStripMenuItem.Text = "Scroll on X-Button ";
+            this.sideButtonsActAsMiddleToolStripMenuItem.Checked = true;
+            this.sideButtonsActAsMiddleToolStripMenuItem.CheckOnClick = true;
+            this.sideButtonsActAsMiddleToolStripMenuItem.CheckState = System.Windows.Forms.CheckState.Checked;
+            this.sideButtonsActAsMiddleToolStripMenuItem.Name = "sideButtonsActAsMiddleToolStripMenuItem";
+            this.sideButtonsActAsMiddleToolStripMenuItem.Size = new System.Drawing.Size(346, 32);
+            this.sideButtonsActAsMiddleToolStripMenuItem.Text = "Side buttons act as middle (scroll + middle click)";
             // 
             // MarbleForm
             // 
@@ -101,8 +92,7 @@
         private System.Windows.Forms.ContextMenuStrip contextMenuStrip1;
         private System.Windows.Forms.ToolStripMenuItem exitToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem scrollOnMiddleButtonToolStripMenuItem;
-        private System.Windows.Forms.ToolStripMenuItem emulateMiddleButtonOnXClickToolStripMenuItem;
-        private System.Windows.Forms.ToolStripMenuItem scrollOnXButtonToolStripMenuItem;
+        private System.Windows.Forms.ToolStripMenuItem sideButtonsActAsMiddleToolStripMenuItem;
     }
 }
 

@@ -39,6 +39,14 @@ namespace MarbleScroll
                     options.SmoothScrolling = false;
                 if (Array.IndexOf(args, "--lock") >= 0)
                     options.LockEnabled = true;
+                if (Array.IndexOf(args, "--no-lock") >= 0)
+                    options.LockEnabled = false;
+                if (Array.IndexOf(args, "--no-side-buttons") >= 0)
+                    options.SideButtonsActAsMiddle = false;
+                if (Array.IndexOf(args, "--snap-to-axis") >= 0)
+                    options.SnapToAxis = true;
+                options.LockWindowMs = ScrollSettings.BoundLockWindow(
+                    ReadPositiveOption(args, "--lock-window-ms", options.LockWindowMs));
                 if (Array.IndexOf(args, "--paused") >= 0)
                     options.Paused = true;
 

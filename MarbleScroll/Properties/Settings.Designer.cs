@@ -37,18 +37,26 @@ namespace MarbleScroll.Properties
 
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Configuration.DefaultSettingValueAttribute("True")]
-        public bool EnableXButtonScroll
+        public bool SideButtonsActAsMiddle
         {
-            get { return (bool)this["EnableXButtonScroll"]; }
-            set { this["EnableXButtonScroll"] = value; }
+            get { return (bool)this["SideButtonsActAsMiddle"]; }
+            set { this["SideButtonsActAsMiddle"] = value; }
         }
 
         [global::System.Configuration.UserScopedSettingAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("False")]
-        public bool ConvertXToMiddleClick
+        [global::System.Configuration.DefaultSettingValueAttribute("0")]
+        public int SettingsSchemaVersion
         {
-            get { return (bool)this["ConvertXToMiddleClick"]; }
-            set { this["ConvertXToMiddleClick"] = value; }
+            get { return (int)this["SettingsSchemaVersion"]; }
+            set { this["SettingsSchemaVersion"] = value; }
+        }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("300")]
+        public int LockWindowMs
+        {
+            get { return (int)this["LockWindowMs"]; }
+            set { this["LockWindowMs"] = value; }
         }
 
         [global::System.Configuration.UserScopedSettingAttribute()]
@@ -60,7 +68,7 @@ namespace MarbleScroll.Properties
         }
 
         [global::System.Configuration.UserScopedSettingAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        [global::System.Configuration.DefaultSettingValueAttribute("True")]
         public bool LockEnabled
         {
             get { return (bool)this["LockEnabled"]; }
@@ -76,7 +84,7 @@ namespace MarbleScroll.Properties
         }
 
         [global::System.Configuration.UserScopedSettingAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("True")]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
         public bool SnapToAxis
         {
             get { return (bool)this["SnapToAxis"]; }

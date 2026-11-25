@@ -38,10 +38,8 @@ namespace MarbleScroll
 
             BindToggle(scrollOnMiddleButtonToolStripMenuItem, options.EnableMiddleButtonScroll,
                 value => { options.EnableMiddleButtonScroll = value; change(() => settings.EnableMiddleButtonScroll = value); });
-            BindToggle(scrollOnXButtonToolStripMenuItem, options.EnableXButtonScroll,
-                value => { options.EnableXButtonScroll = value; change(() => settings.EnableXButtonScroll = value); });
-            BindToggle(emulateMiddleButtonOnXClickToolStripMenuItem, options.ConvertXToMiddleClick,
-                value => { options.ConvertXToMiddleClick = value; change(() => settings.ConvertXToMiddleClick = value); });
+            BindToggle(sideButtonsActAsMiddleToolStripMenuItem, options.SideButtonsActAsMiddle,
+                value => { options.SideButtonsActAsMiddle = value; change(() => settings.SideButtonsActAsMiddle = value); });
             contextMenuStrip1.Items.Remove(exitToolStripMenuItem);
             contextMenuStrip1.Items.Add(new ToolStripSeparator());
             AddToggle("Smooth scrolling", options.SmoothScrolling,

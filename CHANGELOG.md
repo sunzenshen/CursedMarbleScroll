@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.1.1
+
+- Back and forward buttons both act as middle by default. Hold and move to scroll, or click without moving to replay a middle click. One tray toggle restores normal back and forward input.
+- Double-click locking is on by default with a 300 ms window, independent of Windows double-click settings. The window is saved per user and bounded to 150–1000 ms. Locked scrolling still expires after 10 seconds of inactivity.
+- Dominant-axis snapping is off by default, allowing free two-axis scrolling.
+- A one-time settings migration applies these defaults and preserves other choices.
+
 ## v1.1.0
 
 - Stationary middle and back-button presses replay a click even after a long hold. Scrolling starts on movement.

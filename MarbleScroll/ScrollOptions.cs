@@ -12,14 +12,16 @@ namespace MarbleScroll
         internal const string RunValue = "MarbleScroll";
 
         public bool EnableMiddleButtonScroll = true;
-        public bool EnableXButtonScroll = true;
-        public bool ConvertXToMiddleClick;
+        public bool SideButtonsActAsMiddle = true;
         public bool SmoothScrolling = true;
-        public bool LockEnabled;
+        public bool LockEnabled = true;
+        public int LockWindowMs = ScrollSettings.DefaultLockWindowMs;
         public bool Reverse;
-        public bool SnapToAxis = true;
+        public bool SnapToAxis;
         public bool Paused;
         public double Speed = 1;
+
+        private const int CurrentSettingsSchemaVersion = 1;
 
         public ScrollOptions Copy() { return (ScrollOptions)MemberwiseClone(); }
 
@@ -33,8 +35,15 @@ namespace MarbleScroll
             {
                 Configuration config = ConfigurationManager.OpenExeConfiguration(ConfigurationUserLevel.PerUserRoamingAndLocal);
                 path = config.FilePath;
-                var section = config.GetSection("userSettings/MarbleScroll.Properties.Settings") as ClientSettingsSection;
                 var settings = Properties.Settings.Default;
+                // Assembly versions have separate user.config files. Import the previous version
+                // only when there is no current file.
+                if (!config.HasFile)
+                {
+                    settings.Upgrade();
+                    config = ConfigurationManager.OpenExeConfiguration(ConfigurationUserLevel.PerUserRoamingAndLocal);
+                }
+                var section = config.GetSection("userSettings/MarbleScroll.Properties.Settings") as ClientSettingsSection;
                 // The settings provider can silently substitute defaults for malformed values.
                 if (section != null)
                 {
@@ -45,16 +54,35 @@ namespace MarbleScroll
                             continue;
                         string value = entry.Value.ValueXml?.InnerText;
                         if ((property.PropertyType == typeof(bool) && !bool.TryParse(value, out _)) ||
+                            (property.PropertyType == typeof(int) && !int.TryParse(value, out _)) ||
                             (entry.Name == nameof(settings.ScrollSpeed) && !IsSpeed(value)))
                             throw new ConfigurationErrorsException("Invalid MarbleScroll setting: " + entry.Name);
+                    }
+                }
+
+                if (settings.SettingsSchemaVersion < CurrentSettingsSchemaVersion)
+                {
+                    var factory = new ScrollOptions();
+                    settings.SideButtonsActAsMiddle = factory.SideButtonsActAsMiddle;
+                    settings.LockEnabled = factory.LockEnabled;
+                    settings.LockWindowMs = factory.LockWindowMs;
+                    settings.SnapToAxis = factory.SnapToAxis;
+                    settings.SettingsSchemaVersion = CurrentSettingsSchemaVersion;
+                    try
+                    {
+                        settings.Save();
+                    }
+                    catch (Exception error)
+                    {
+                        Debug.WriteLine(error);
                     }
                 }
 
                 return new ScrollOptions
                 {
                     EnableMiddleButtonScroll = settings.EnableMiddleButtonScroll,
-                    EnableXButtonScroll = settings.EnableXButtonScroll,
-                    ConvertXToMiddleClick = settings.ConvertXToMiddleClick,
+                    SideButtonsActAsMiddle = settings.SideButtonsActAsMiddle,
+                    LockWindowMs = ScrollSettings.BoundLockWindow(settings.LockWindowMs),
                     SmoothScrolling = settings.SmoothScrolling,
                     LockEnabled = settings.LockEnabled,
                     Reverse = settings.Reverse,

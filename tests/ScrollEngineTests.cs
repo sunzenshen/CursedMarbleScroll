@@ -34,9 +34,9 @@ internal static class ScrollEngineTests
             throw new InvalidOperationException(description + ": expected " + expected + ", got " + actual);
     }
 
-    private static ScrollEngine Engine(bool enableLock = false)
+    private static ScrollEngine Engine()
     {
-        return new ScrollEngine(new ScrollSettings { LockEnabled = enableLock }, 500);
+        return new ScrollEngine(new ScrollSettings());
     }
 
     private static void Units(ScrollDecision decision, int x, int y, string description)
@@ -69,10 +69,11 @@ internal static class ScrollEngineTests
         Equal(ScrollState.ButtonPressed, engine.State, "hold alone does not activate scrolling");
         Units(engine.Move(1, 0, 311), 2, 0, "hold keeps the buffer");
         engine.ButtonUp(Middle, 312);
+        engine.SetLockEnabled(false);
         engine.ButtonDown(Middle, 400);
         Equal(DecisionKind.ReplayClick, engine.ButtonUp(Middle, 1400).Kind, "long stationary hold replays click");
 
-        engine = Engine(true);
+        engine = Engine();
         engine.ButtonDown(Middle, 0);
         Equal(DecisionKind.ReplayClick, engine.ButtonUp(Middle, 1000).Kind,
             "long stationary hold also replays with lock enabled");
@@ -80,7 +81,7 @@ internal static class ScrollEngineTests
 
     private static void DominantAxis()
     {
-        var engine = new ScrollEngine(new ScrollSettings { SnapToAxis = true }, 500);
+        var engine = new ScrollEngine(new ScrollSettings { SnapToAxis = true });
         engine.ButtonDown(Middle, 0);
         Equal(DecisionKind.Suppress, engine.Move(0.5, 0.5, 1).Kind, "buffer before axis choice");
         Units(engine.Move(0.5, 2.5, 2), 0, -12, "vertical wins from accumulated motion");
@@ -101,6 +102,7 @@ internal static class ScrollEngineTests
         Equal(DecisionKind.Pass, engine.Move(0, 10, 2).Kind, "reset restores pointer");
         Equal(DecisionKind.Suppress, engine.ButtonUp(Middle, 3).Kind, "reset still pairs the consumed down");
         Equal(DecisionKind.Pass, engine.ButtonUp(Middle, 4).Kind, "ownership is released");
+        engine.SetLockEnabled(false);
         Equal(DecisionKind.ReplayClick, Click(engine, 5).Kind, "next stationary click replays");
     }
 
@@ -114,7 +116,7 @@ internal static class ScrollEngineTests
         Units(engine.Move(3, 4, 3), -3, 16, "reverse both axes");
 
         var settings = new ScrollSettings { HorizontalSensitivity = 0.5, VerticalSensitivity = 2 };
-        engine = new ScrollEngine(settings, 500);
+        engine = new ScrollEngine(settings);
         engine.ButtonDown(Middle, 0);
         Units(engine.Move(4, 3, 1), 2, -24, "independent sensitivity");
     }
@@ -122,7 +124,7 @@ internal static class ScrollEngineTests
     private static void RemaindersAndBounds()
     {
         var settings = new ScrollSettings { Speed = 0.25, MovementThreshold = 0 };
-        var engine = new ScrollEngine(settings, 500);
+        var engine = new ScrollEngine(settings);
         engine.ButtonDown(Middle, 0);
         int x = 0, y = 0;
         for (int i = 1; i <= 100; i++)
@@ -139,7 +141,7 @@ internal static class ScrollEngineTests
         Units(engine.Move(1, 0.25, 104), 0, 0, "fractional units do not carry into the next gesture");
 
         settings = new ScrollSettings { Acceleration = true };
-        engine = new ScrollEngine(settings, 500);
+        engine = new ScrollEngine(settings);
         engine.ButtonDown(Middle, 0);
         Units(engine.Move(100, 0, 1), 200, 0, "acceleration");
         Units(engine.Move(double.MaxValue, double.MaxValue, 2), 16384, -32767, "input, gain and output clamps");
@@ -147,7 +149,7 @@ internal static class ScrollEngineTests
         Equal(ScrollState.Normal, engine.State, "invalid movement resets");
 
         settings = new ScrollSettings { Speed = double.NaN, HorizontalSensitivity = 99, VerticalSensitivity = -1 };
-        engine = new ScrollEngine(settings, 500);
+        engine = new ScrollEngine(settings);
         engine.ButtonDown(Middle, 0);
         Units(engine.Move(4, 3, 1), 20, 0, "settings bounds and fallback");
     }
@@ -155,55 +157,64 @@ internal static class ScrollEngineTests
     private static void ClickTiming()
     {
         var engine = Engine();
+        engine.SetLockEnabled(false);
         var immediate = Click(engine, 0);
         Equal(DecisionKind.ReplayClick, immediate.Kind, "lock off replays on release");
         Equal(Middle, immediate.ReplayButton, "immediate replay button");
         Equal(false, engine.PendingDeadlineMs.HasValue, "no replay timer with lock off");
         Equal(DecisionKind.ReplayClick, Click(engine, 100).Kind, "quick second click also replays");
 
-        engine = Engine(true);
+        engine = Engine();
         Equal(DecisionKind.Suppress, Click(engine, 0).Kind, "lock on holds first click");
         double deadline = engine.PendingDeadlineMs.Value;
-        Equal(DecisionKind.Pass, engine.Tick(500).Kind, "inclusive double-click boundary");
+        Equal(DecisionKind.Pass, engine.Tick(300).Kind, "inclusive double-click boundary");
         var late = engine.Tick(deadline);
         Equal(DecisionKind.ReplayClick, late.Kind, "single click replays at deadline");
         Equal(Middle, late.ReplayButton, "delayed replay button");
         Equal(DecisionKind.Pass, engine.Tick(600).Kind, "no duplicate replay");
 
         Click(engine, 700);
-        var newPress = engine.ButtonDown(Middle, 1201);
+        var newPress = engine.ButtonDown(Middle, 1001);
         Equal(DecisionKind.Suppress, newPress.Kind, "expired first click permits new press");
         Equal(Middle, newPress.ReplayButton, "expired click replays even if timer has not run");
         Equal(ScrollState.ButtonPressed, engine.State, "late second press starts new gesture");
 
-        engine = new ScrollEngine(new ScrollSettings { LockEnabled = true }, 100);
-        engine.ButtonDown(ScrollButton.X1, 0);
-        Equal(ScrollButton.X1, engine.ButtonUp(ScrollButton.X1, 150).ReplayButton,
-            "short click released after system interval replays immediately");
+        engine = new ScrollEngine(new ScrollSettings { LockWindowMs = 100 });
+        Click(engine, 0);
+        Equal(DecisionKind.Pass, engine.Tick(150).Kind, "minimum window is inclusive");
+        Equal(DecisionKind.ReplayClick, engine.Tick(151).Kind, "window clamps to 150 ms");
+        engine.ButtonDown(ScrollButton.X1, 200);
+        Equal(ScrollButton.X1, engine.ButtonUp(ScrollButton.X1, 351).ReplayButton,
+            "side button released after the window replays immediately");
+
+        engine = new ScrollEngine(new ScrollSettings { LockWindowMs = 1500 });
+        Click(engine, 0);
+        Equal(DecisionKind.Pass, engine.Tick(1000).Kind, "maximum window is inclusive");
+        Equal(DecisionKind.ReplayClick, engine.Tick(1001).Kind, "window clamps to 1000 ms");
     }
 
     private static void LockAndUnlock()
     {
-        var engine = Engine(true);
+        var engine = Engine();
         Click(engine, 0);
-        Equal(DecisionKind.Suppress, engine.ButtonDown(Middle, 500).Kind, "second press reserved");
+        Equal(DecisionKind.Suppress, engine.ButtonDown(Middle, 300).Kind, "second press reserved");
         Equal(ScrollState.LockedScroll, engine.State, "locks at inclusive boundary");
-        engine.ButtonDown(Middle, 501);
+        engine.ButtonDown(Middle, 301);
         Equal(ScrollState.LockedScroll, engine.State, "duplicate activation down ignored");
-        Equal(DecisionKind.Suppress, engine.ButtonUp(Middle, 502).Kind, "activation release reserved");
-        Units(engine.Move(3, 2, 503), 3, -8, "scrolls without holding");
-        Equal(DecisionKind.Pass, engine.ButtonDown(ScrollButton.None, 504).Kind, "unrelated down passes");
-        Equal(DecisionKind.Pass, engine.ButtonUp(ScrollButton.X2, 505).Kind, "unmatched up passes");
+        Equal(DecisionKind.Suppress, engine.ButtonUp(Middle, 302).Kind, "activation release reserved");
+        Units(engine.Move(3, 2, 303), 3, -8, "scrolls without holding");
+        Equal(DecisionKind.Pass, engine.ButtonDown(ScrollButton.None, 304).Kind, "unrelated down passes");
+        Equal(DecisionKind.Pass, engine.ButtonUp(ScrollButton.X2, 305).Kind, "unmatched up passes");
         Equal(ScrollState.LockedScroll, engine.State, "other buttons preserve lock");
-        Equal(DecisionKind.Suppress, engine.ButtonDown(Middle, 506).Kind, "unlock down reserved");
-        Equal(DecisionKind.Pass, engine.Move(3, 2, 507).Kind, "moves while unlock press is held");
-        Equal(DecisionKind.Suppress, engine.ButtonUp(Middle, 508).Kind, "unlock release reserved");
+        Equal(DecisionKind.Suppress, engine.ButtonDown(Middle, 306).Kind, "unlock down reserved");
+        Equal(DecisionKind.Pass, engine.Move(3, 2, 307).Kind, "moves while unlock press is held");
+        Equal(DecisionKind.Suppress, engine.ButtonUp(Middle, 308).Kind, "unlock release reserved");
         Equal(ScrollState.Normal, engine.State, "unlock restored normal mode");
     }
 
     private static void InterclickMovement()
     {
-        var engine = Engine(true);
+        var engine = Engine();
         Click(engine, 0);
         var jitter = engine.Move(0.5, 0, 30);
         Equal(DecisionKind.Pass, jitter.Kind, "jitter passes");
@@ -217,7 +228,7 @@ internal static class ScrollEngineTests
 
     private static void TimeReset()
     {
-        var engine = Engine(true);
+        var engine = Engine();
         Click(engine, 100);
         Click(engine, 150);
         Equal(ScrollState.LockedScroll, engine.State, "locked before time reset");

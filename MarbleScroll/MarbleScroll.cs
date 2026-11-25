@@ -21,7 +21,6 @@ namespace MarbleScroll
         private readonly Stopwatch clock = Stopwatch.StartNew();
         private readonly Queue<Output> outputQueue = new Queue<Output>(QueueLimit);
         private readonly int lockIdleMs;
-        private readonly int doubleClickMs = SystemInformation.DoubleClickTime;
         private readonly Thread hookThread, worker;
         private readonly ManualResetEventSlim ready = new ManualResetEventSlim();
         private Exception startupError;
@@ -124,6 +123,9 @@ namespace MarbleScroll
             Post(() =>
             {
                 bool cancelGesture = options.Paused != snapshot.Paused ||
+                    (options.SideButtonsActAsMiddle && !snapshot.SideButtonsActAsMiddle &&
+                        (engine.IsTrigger(ScrollButton.X1) || engine.IsTrigger(ScrollButton.X2) ||
+                        idleButton == ScrollButton.X1 || idleButton == ScrollButton.X2)) ||
                     (engine.State == ScrollState.LockedScroll && !snapshot.LockEnabled);
                 bool outputChanged = options.Speed != snapshot.Speed || options.Reverse != snapshot.Reverse ||
                     options.SmoothScrolling != snapshot.SmoothScrolling || options.SnapToAxis != snapshot.SnapToAxis;
@@ -170,10 +172,11 @@ namespace MarbleScroll
                 engine = new ScrollEngine(new ScrollSettings
                 {
                     LockEnabled = options.LockEnabled,
+                    LockWindowMs = options.LockWindowMs,
                     Reverse = options.Reverse,
                     Speed = options.Speed,
                     SnapToAxis = options.SnapToAxis
-                }, doubleClickMs);
+                });
                 if (stopping)
                     throw new OperationCanceledException("Mouse hook startup was canceled.");
                 // Install before WinForms creates the hook thread's marshaling window.
@@ -396,7 +399,7 @@ namespace MarbleScroll
                         (forwardedButtons & ButtonMask(button)) != 0)
                         return false;
                     bool enabled = button == ScrollButton.Middle ? options.EnableMiddleButtonScroll :
-                        button == ScrollButton.X1 && options.EnableXButtonScroll;
+                        (button == ScrollButton.X1 || button == ScrollButton.X2) && options.SideButtonsActAsMiddle;
                     if (!enabled && !(before == ScrollState.LockedScroll && engine.IsTrigger(button)))
                         button = ScrollButton.None;
                     if (before == ScrollState.WaitingForSecondClick && engine.IsTrigger(button) &&
@@ -420,7 +423,6 @@ namespace MarbleScroll
                             activeClick = new ClickContext
                             {
                                 Button = button,
-                                Destination = options.ConvertXToMiddleClick ? ScrollButton.Middle : button,
                                 Root = options.LockEnabled ? RootAt(mouse.pt) : IntPtr.Zero,
                                 ConsumedAt = now
                             };
@@ -499,7 +501,7 @@ namespace MarbleScroll
 
         private void ApplyDecision(ScrollDecision decision, ClickContext replay)
         {
-            if (decision.ReplayButton != ScrollButton.None && replay.Destination != ScrollButton.None)
+            if (decision.ReplayButton != ScrollButton.None && replay.Button != ScrollButton.None)
                 Enqueue(new Output { Click = replay });
 
             if (decision.Kind == DecisionKind.Scroll)
@@ -546,8 +548,8 @@ namespace MarbleScroll
                 if (stopping || outputFailed)
                     return;
                 output.Generation = generation;
-                if (output.Click.Destination == ScrollButton.None && queueTail != null &&
-                    queueTail.Click.Destination == ScrollButton.None &&
+                if (output.Click.Button == ScrollButton.None && queueTail != null &&
+                    queueTail.Click.Button == ScrollButton.None &&
                     Math.Abs(queueTail.X + output.X) <= 32767 &&
                     Math.Abs(queueTail.Y + output.Y) <= 32767)
                 {
@@ -586,7 +588,7 @@ namespace MarbleScroll
                                 continue;
                             }
                             double delay = nextWheel - clock.Elapsed.TotalMilliseconds;
-                            if (outputQueue.Peek().Click.Destination != ScrollButton.None || delay <= 0)
+                            if (outputQueue.Peek().Click.Button != ScrollButton.None || delay <= 0)
                             {
                                 output = outputQueue.Dequeue();
                                 if (outputQueue.Count == 0)
@@ -605,7 +607,7 @@ namespace MarbleScroll
                     if (output == null || !IsCurrent(output))
                         continue;
 
-                    if (output.Click.Destination != ScrollButton.None)
+                    if (output.Click.Button != ScrollButton.None)
                         EmitClick(output);
                     else
                     {
@@ -648,19 +650,17 @@ namespace MarbleScroll
             ClickContext click = output.Click;
             if (outstandingRelease != null)
                 return;
-            if (click.Delayed && (clock.Elapsed.TotalMilliseconds - click.ConsumedAt > doubleClickMs + 250 ||
+            if (click.Delayed && (clock.Elapsed.TotalMilliseconds - click.ConsumedAt > options.LockWindowMs + 250 ||
                 !GetPhysicalCursorPos(out POINT point) || RootAt(point) != click.Root))
                 return;
-            if ((forwardedButtons & ButtonMask(click.Destination)) != 0 ||
-                (click.Button != click.Destination && (GetAsyncKeyState(4) & 0x8000) != 0) ||
+            if ((forwardedButtons & ButtonMask(ScrollButton.Middle)) != 0 ||
+                (click.Button != ScrollButton.Middle && (GetAsyncKeyState(4) & 0x8000) != 0) ||
                 !IsCurrent(output))
                 return;
 
-            bool middle = click.Destination == ScrollButton.Middle;
-            int data = middle ? 0 : (click.Destination == ScrollButton.X1 ? 1 : 2);
-            Input up = MakeInput(middle ? 0x0040u : 0x0100u, data);
+            Input up = MakeInput(0x0040, 0);
             Input[] release = { up };
-            uint sent = Send(MakeInput(middle ? 0x0020u : 0x0080u, data), up);
+            uint sent = Send(MakeInput(0x0020, 0), up);
             if (sent == 1)
             {
                 outstandingRelease = release;
@@ -724,7 +724,7 @@ namespace MarbleScroll
 
         private struct ClickContext
         {
-            public ScrollButton Button, Destination;
+            public ScrollButton Button;
             public IntPtr Root;
             public double ConsumedAt;
             public bool Delayed;

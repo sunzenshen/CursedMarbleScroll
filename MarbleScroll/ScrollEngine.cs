@@ -55,10 +55,13 @@ namespace MarbleScroll
         public double HorizontalSensitivity { get; set; } = 1;
         public double VerticalSensitivity { get; set; } = 1;
         public double MovementThreshold { get; set; } = 2;
-        public double? DoubleClickIntervalMs { get; set; }
+        internal const int DefaultLockWindowMs = 300;
+        public int LockWindowMs { get; set; } = DefaultLockWindowMs;
+
+        internal static int BoundLockWindow(int value) { return Math.Max(150, Math.Min(1000, value)); }
         public bool Reverse { get; set; }
         public bool Acceleration { get; set; }
-        public bool LockEnabled { get; set; }
+        public bool LockEnabled { get; set; } = true;
         public bool SnapToAxis { get; set; }
     }
 
@@ -87,15 +90,13 @@ namespace MarbleScroll
             }
         }
 
-        public ScrollEngine(ScrollSettings settings, double systemDoubleClickMs)
+        public ScrollEngine(ScrollSettings settings)
         {
             speed = Bound(settings.Speed, 0.1, 10, 1);
             horizontal = Bound(settings.HorizontalSensitivity, 0, 5, 1);
             vertical = Bound(settings.VerticalSensitivity, 0, 5, 1);
             threshold = Bound(settings.MovementThreshold, 0, 30, 2);
-            doubleClickMs = settings.DoubleClickIntervalMs.HasValue
-                ? Bound(settings.DoubleClickIntervalMs.Value, 150, 1500, 500)
-                : Bound(systemDoubleClickMs, 1, 5000, 500);
+            doubleClickMs = ScrollSettings.BoundLockWindow(settings.LockWindowMs);
             reverse = settings.Reverse;
             acceleration = settings.Acceleration;
             lockEnabled = settings.LockEnabled;

@@ -22,6 +22,7 @@ public sealed class MouseTestDesktop : IDisposable
         public int WheelUp, WheelDown, HWheelRight, OtherWheel;
         public int MiddleDown, MiddleUp, XDown, XUp, LeftDown, LeftUp, RightDown, RightUp;
         public int VerticalTotal, HorizontalTotal, PartialWheel, SubNotchWheel;
+        public int LastXDown, LastXUp;
 
         internal Counts Snapshot()
         {
@@ -63,10 +64,18 @@ public sealed class MouseTestDesktop : IDisposable
                 case 0x0202: MouseCounts.LeftUp++; break;
                 case 0x0204: MouseCounts.RightDown++; break;
                 case 0x0205: MouseCounts.RightUp++; break;
-                case 0x0207: MouseCounts.MiddleDown++; break;
+                case 0x0207:
+                case 0x0209: MouseCounts.MiddleDown++; break;
                 case 0x0208: MouseCounts.MiddleUp++; break;
-                case 0x020B: MouseCounts.XDown++; break;
-                case 0x020C: MouseCounts.XUp++; break;
+                case 0x020B:
+                case 0x020D:
+                    MouseCounts.XDown++;
+                    MouseCounts.LastXDown = delta;
+                    break;
+                case 0x020C:
+                    MouseCounts.XUp++;
+                    MouseCounts.LastXUp = delta;
+                    break;
             }
             base.WndProc(ref message);
         }
@@ -259,14 +268,14 @@ function Move-ToStart {
     }
 }
 
-function Invoke-Gesture([int]$Dx, [int]$Dy, [switch]$XButton, [int]$HoldMs = 100) {
+function Invoke-Gesture([int]$Dx, [int]$Dy, [int]$SideButton = 0, [int]$HoldMs = 100) {
     $down = [MouseTestDesktop]::MiddleDown
     $up = [MouseTestDesktop]::MiddleUp
     $data = 0
-    if ($XButton) {
+    if ($SideButton) {
         $down = [MouseTestDesktop]::XDown
         $up = [MouseTestDesktop]::XUp
-        $data = 1 # XBUTTON1
+        $data = $SideButton
     }
 
     $origin = [MouseTestDesktop]::Cursor()
@@ -306,11 +315,11 @@ function Write-Result([string]$Name, [bool]$Passed, [string]$Details) {
     Write-Host "$status $Name - $Details"
 }
 
-function Test-Gesture([string]$Name, [int]$Dx, [int]$Dy, [scriptblock]$Check, [switch]$XButton, [int]$HoldMs = 100) {
+function Test-Gesture([string]$Name, [int]$Dx, [int]$Dy, [scriptblock]$Check, [int]$SideButton = 0, [int]$HoldMs = 100) {
     try {
         Move-ToStart
         $null = $desktop.ReadCounts($true)
-        $result = Invoke-Gesture $Dx $Dy -XButton:$XButton -HoldMs $HoldMs
+        $result = Invoke-Gesture $Dx $Dy -SideButton $SideButton -HoldMs $HoldMs
         $passed = & $Check $result.Counts $result
         $details = "$($result.Counts), max cursor movement=$($result.MaxMovement) px"
         if ($null -ne $result.BeforeRelease) {
@@ -357,9 +366,15 @@ function Wait-MarbleScrollHook {
     throw 'MarbleScroll did not produce a wheel event in the startup readiness probe.'
 }
 
-function Send-MiddleClick {
-    [MouseTestDesktop]::Button([MouseTestDesktop]::MiddleDown, 0)
-    [MouseTestDesktop]::Button([MouseTestDesktop]::MiddleUp, 0)
+function Send-Click([int]$SideButton = 0) {
+    if ($SideButton) {
+        [MouseTestDesktop]::Button([MouseTestDesktop]::XDown, $SideButton)
+        [MouseTestDesktop]::Button([MouseTestDesktop]::XUp, $SideButton)
+    }
+    else {
+        [MouseTestDesktop]::Button([MouseTestDesktop]::MiddleDown, 0)
+        [MouseTestDesktop]::Button([MouseTestDesktop]::MiddleUp, 0)
+    }
 }
 
 function Stop-MarbleScroll {
@@ -457,17 +472,14 @@ try {
                 $counts.MiddleDown -eq 1 -and $counts.MiddleUp -eq 1 -and $counts.WheelUp -eq 0 -and
                 $counts.WheelDown -eq 0 -and $counts.HWheelRight -eq 0 -and $counts.OtherWheel -eq 0
         }
-        Test-Gesture 'Stationary XBUTTON1 click (replayed as XBUTTON1)' 0 0 {
-            param($counts, $gesture)
-            $gesture.BeforeRelease.XDown -eq 0 -and $counts.XDown -eq 1 -and $counts.XUp -eq 1 -and
-                $counts.MiddleDown -eq 0 -and $counts.MiddleUp -eq 0 -and $counts.VerticalTotal -eq 0
-        } -XButton
-        Test-Gesture 'XBUTTON1 drag down (negative wheel, swallowed)' 0 $vertical {
-            param($counts, $gesture)
-            $counts.WheelDown -ge 1 -and $counts.WheelUp -eq 0 -and $counts.OtherWheel -eq 0 -and
-                $counts.HWheelRight -eq 0 -and $counts.XDown -eq 0 -and $counts.XUp -eq 0 -and
-                $counts.MiddleDown -eq 0 -and $counts.MiddleUp -eq 0 -and $gesture.MaxMovement -le 3
-        } -XButton
+        foreach ($side in 1, 2) {
+            Test-Gesture "XBUTTON$side drag down (negative wheel, swallowed)" 0 $vertical {
+                param($counts, $gesture)
+                $counts.WheelDown -ge 1 -and $counts.WheelUp -eq 0 -and $counts.OtherWheel -eq 0 -and
+                    $counts.HWheelRight -eq 0 -and $counts.XDown -eq 0 -and $counts.XUp -eq 0 -and
+                    $counts.MiddleDown -eq 0 -and $counts.MiddleUp -eq 0 -and $gesture.MaxMovement -le 3
+            } -SideButton $side
+        }
     )
 
     $results += Test-Gesture 'Small moves produce smooth deltas at about four units per pixel' 0 24 {
@@ -484,10 +496,10 @@ try {
             $counts.MiddleDown -eq 1 -and $counts.MiddleUp -eq 1 -and $counts.VerticalTotal -eq 0
     } -HoldMs 1000
 
-    $results += Test-Gesture 'Mostly vertical diagonal drag snaps to vertical' 24 $vertical {
+    $results += Test-Gesture 'Default diagonal drag scrolls on both axes' 24 $vertical {
         param($counts, $gesture)
-        $counts.WheelDown -ge 1 -and $counts.HorizontalTotal -eq 0 -and
-            $counts.HWheelRight -eq 0 -and $counts.OtherWheel -eq 0 -and $gesture.MaxMovement -le 3
+        $counts.WheelDown -ge 1 -and $counts.HorizontalTotal -gt 0 -and
+            $counts.HWheelRight -gt 0 -and $counts.OtherWheel -eq 0 -and $gesture.MaxMovement -le 3
     }
 
     $second = Start-Process -FilePath $exePath -ArgumentList '--defaults' -PassThru
@@ -510,6 +522,13 @@ try {
             $counts.HWheelRight -eq 0 -and $counts.OtherWheel -eq 0
     }
 
+    Start-MarbleScroll '--defaults --snap-to-axis'
+    $results += Test-Gesture 'Mostly vertical diagonal drag snaps to vertical' 24 $vertical {
+        param($counts, $gesture)
+        $counts.WheelDown -ge 1 -and $counts.HorizontalTotal -eq 0 -and
+            $counts.HWheelRight -eq 0 -and $counts.OtherWheel -eq 0 -and $gesture.MaxMovement -le 3
+    }
+    Stop-MarbleScroll
     Start-MarbleScroll '--defaults --notches'
     $results += Test-Gesture 'Notch mode emits only whole notches' 0 24 {
         param($counts, $gesture)
@@ -518,23 +537,33 @@ try {
     }
 
     Stop-MarbleScroll
-    Start-MarbleScroll '--defaults --lock'
-    Move-ToStart
-    $null = $desktop.ReadCounts($true)
-    $interval = [System.Windows.Forms.SystemInformation]::DoubleClickTime
-    Send-MiddleClick
-    $early = $desktop.ReadCounts($false)
-    Start-Sleep -Milliseconds ($interval + 300)
-    $late = $desktop.ReadCounts($false)
-    $single = ($interval -lt 150 -or ($early.MiddleDown -eq 0 -and $early.MiddleUp -eq 0)) -and
-        $late.MiddleDown -eq 1 -and $late.MiddleUp -eq 1 -and $late.VerticalTotal -eq 0
-    Write-Result 'Lock enabled replays one stationary click after the interval' $single "early $early; late $late"
-    $results += $single
+    Start-MarbleScroll '--defaults'
+    $interval = 300
+    foreach ($button in 0, 1, 2) {
+        Move-ToStart
+        $null = $desktop.ReadCounts($true)
+        $timer = [System.Diagnostics.Stopwatch]::StartNew()
+        Send-Click $button
+        Start-Sleep -Milliseconds 100
+        $early = $desktop.ReadCounts($false)
+        $earlyMs = $timer.ElapsedMilliseconds
+        do {
+            Start-Sleep -Milliseconds 15
+            $late = $desktop.ReadCounts($false)
+        } while ($late.MiddleUp -eq 0 -and $timer.ElapsedMilliseconds -lt ($interval + 250))
+        $replayMs = $timer.ElapsedMilliseconds
+        $single = ($earlyMs -ge $interval -or ($early.MiddleDown -eq 0 -and $early.MiddleUp -eq 0)) -and
+            $replayMs -ge ($interval - 25) -and $late.MiddleDown -eq 1 -and $late.MiddleUp -eq 1 -and
+            $late.XDown -eq 0 -and $late.XUp -eq 0 -and $late.VerticalTotal -eq 0 -and $late.HorizontalTotal -eq 0
+        $name = @('Middle', 'XBUTTON1', 'XBUTTON2')[$button]
+        Write-Result "$name single click replays as middle after the default lock window" $single "at ${earlyMs}ms $early; at ${replayMs}ms $late"
+        $results += $single
+    }
 
     $null = $desktop.ReadCounts($true)
     $origin = [MouseTestDesktop]::Cursor()
-    Send-MiddleClick
-    Send-MiddleClick
+    Send-Click
+    Send-Click
     [MouseTestDesktop]::Button([MouseTestDesktop]::LeftDown, 0)
     [MouseTestDesktop]::Button([MouseTestDesktop]::LeftUp, 0)
     [MouseTestDesktop]::Button([MouseTestDesktop]::RightDown, 0)
@@ -553,7 +582,7 @@ try {
         "left $($lockedCounts.LeftDown)/$($lockedCounts.LeftUp), right $($lockedCounts.RightDown)/$($lockedCounts.RightUp)")
     $results += $otherButtons
 
-    Send-MiddleClick
+    Send-Click
     $desktop.Move($origin.X, $origin.Y + 40)
     Start-Sleep -Milliseconds ($interval + 200)
     $unlockedCounts = $desktop.ReadCounts($false)
@@ -563,13 +592,27 @@ try {
     Write-Result 'One click unlocks and restores pointer movement' $unlocked "$unlockedCounts, cursor moved $unlockedMovement px"
     $results += $unlocked
 
-    Stop-MarbleScroll
-    Start-MarbleScroll '--defaults --lock --lock-idle-ms 1500'
     Move-ToStart
     $origin = [MouseTestDesktop]::Cursor()
     $null = $desktop.ReadCounts($true)
-    Send-MiddleClick
-    Send-MiddleClick
+    Send-Click 2
+    Send-Click 2
+    $desktop.Move($origin.X, $origin.Y + 20)
+    Start-Sleep -Milliseconds ($interval + 100)
+    $counts = $desktop.ReadCounts($false)
+    $movement = Get-CursorDistance $origin ([MouseTestDesktop]::Cursor())
+    $sideLock = $counts.VerticalTotal -lt 0 -and $movement -le 3 -and
+        $counts.XDown -eq 0 -and $counts.XUp -eq 0 -and $counts.MiddleDown -eq 0 -and $counts.MiddleUp -eq 0
+    Write-Result 'XBUTTON2 double-click locks scrolling' $sideLock "$counts, cursor moved $movement px"
+    $results += $sideLock
+
+    Stop-MarbleScroll
+    Start-MarbleScroll '--defaults --lock-idle-ms 1500'
+    Move-ToStart
+    $origin = [MouseTestDesktop]::Cursor()
+    $null = $desktop.ReadCounts($true)
+    Send-Click
+    Send-Click
     $desktop.Move($origin.X, $origin.Y + 20)
     Start-Sleep -Milliseconds 150
     $beforeIdle = $desktop.ReadCounts($false)
@@ -584,6 +627,19 @@ try {
     $results += $idle
 
     Stop-MarbleScroll
+    Start-MarbleScroll '--defaults --no-side-buttons'
+    foreach ($side in 1, 2) {
+        $results += Test-Gesture "XBUTTON$side click and pointer motion pass through with side buttons disabled" 0 $vertical {
+            param($counts, $gesture)
+            $gesture.MaxMovement -ge ($vertical - 3) -and
+                $counts.XDown -eq 1 -and $counts.XUp -eq 1 -and
+                $counts.LastXDown -eq $side -and $counts.LastXUp -eq $side -and
+                $counts.MiddleDown -eq 0 -and $counts.MiddleUp -eq 0 -and
+                $counts.VerticalTotal -eq 0 -and $counts.HorizontalTotal -eq 0
+        } -SideButton $side
+    }
+
+    Stop-MarbleScroll
     Start-MarbleScroll '--defaults --paused'
     $normalInput = {
         param($counts, $gesture)
@@ -595,7 +651,7 @@ try {
         param($counts, $gesture)
         $gesture.MaxMovement -ge ($vertical - 3) -and $counts.XDown -eq 1 -and
             $counts.XUp -eq 1 -and $counts.VerticalTotal -eq 0 -and $counts.HorizontalTotal -eq 0
-    } -XButton
+    } -SideButton 1
 
     Stop-MarbleScroll
     Start-MarbleScroll '--defaults --exit-after-ms 1200'
