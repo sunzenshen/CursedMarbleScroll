@@ -1,8 +1,7 @@
 # MarbleScroll
 
-I too was caught off guard when the original install of MarbleScroll became no longer available.
-
-I have made questionable ethical sacrifices to the dark god Claude to bring you this fork, so use it at your own risk.
+> I too was caught off guard when the original install of MarbleScroll became no longer available.
+> Questionable sacrifices to the dark god Claude were made in this fork, so use it at your own risk.
 
 MarbleScroll is a Windows tray app for scrolling with a mouse or trackball. Hold the middle button and move to scroll. Press and release it without crossing the movement threshold to open a link in a new tab, close a tab, or paste in an app that supports middle-click paste. The back side button also works by default. On Linux, the equivalent is [libinput's on-button-down scroll method](https://wayland.freedesktop.org/libinput/doc/latest/scrolling.html#on-button-scrolling).
 
@@ -75,15 +74,8 @@ v1.0.0 is the baseline build of the forked upstream code; v1.1.0 is the hardened
 
 Tags such as `vX.Y.Z` publish the tested AnyCPU build as `MarbleScroll-<tag>.zip`, with the executable, configuration, license, and README. The release also includes `SHA256SUMS.txt` for verifying the ZIP.
 
-## Audit
-
-A full-history review found no malicious or privacy-invasive code. The app uses a low-level mouse hook and keeps gesture data in memory. It has no keyboard hook, telemetry, or network client.
-
-v1.1.0 moves the hook to a dedicated message loop, adds fail-open resets and idle recovery, preserves consumed-button pairing, bounds and invalidates queued output, checks injection and retries partial click releases, validates delayed replay targets, and uses PerMonitorV2 DPI awareness. The release workflow pins its actions and publishes tested builds with a checksum.
-
 ## Attribution
 
 - Original MarbleScroll by fewprojects.com (site offline).
 - The MIT-licensed [j-zero/MarbleScroll](https://github.com/j-zero/MarbleScroll) fork added the middle- and X-button options.
 - The scroll engine is adapted from [kaushr/MarbleScroll for macOS](https://github.com/kaushr/MarbleScroll), MIT licensed, Copyright 2026 Kaushik Ruparel.
-- This fork is maintained by sunzenshen.
