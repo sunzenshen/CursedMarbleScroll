@@ -39,6 +39,8 @@ namespace MarbleScroll
         private int notchRemainderX, notchRemainderY;
         private ClickContext activeClick, waitingClick, idleClick;
         private ScrollButton idleButton;
+        // Left (1) and right (2) presses that unlocked scrolling; their releases are swallowed too.
+        private int unlockClicks;
         private Output queueTail;
         private int generation;
         private bool releaseRequested;
@@ -527,6 +529,29 @@ namespace MarbleScroll
                         }
                     }
                     break;
+                case MouseMessage.LeftDown:
+                case MouseMessage.RightDown:
+                {
+                    int mask = message == MouseMessage.LeftDown ? 1 : 2;
+                    if (before != ScrollState.LockedScroll)
+                    {
+                        unlockClicks &= ~mask; // A fresh press means any earlier release was missed.
+                        return false;
+                    }
+                    // While locked, a left or right click only unlocks.
+                    unlockClicks |= mask;
+                    ResetGesture();
+                    return true;
+                }
+                case MouseMessage.LeftUp:
+                case MouseMessage.RightUp:
+                {
+                    int mask = message == MouseMessage.LeftUp ? 1 : 2;
+                    if ((unlockClicks & mask) == 0)
+                        return false;
+                    unlockClicks &= ~mask;
+                    return true;
+                }
                 default:
                     return false;
             }
@@ -877,7 +902,9 @@ namespace MarbleScroll
         {
             Move = 0x0200,
             LeftDown = 0x0201,
+            LeftUp = 0x0202,
             RightDown = 0x0204,
+            RightUp = 0x0205,
             Wheel = 0x020A,
             HorizontalWheel = 0x020E,
             MiddleDown = 0x0207,

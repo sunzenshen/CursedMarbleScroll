@@ -15,7 +15,7 @@ Run `MarbleScroll.exe` and right-click its tray icon. Only one instance runs per
 | Triggers | Side buttons act as middle (scroll + middle click) | On. Hold either the back (XBUTTON1) or forward (XBUTTON2) button and move to scroll. A stationary press replays a middle click. Turn this off to restore normal back and forward input. |
 | Behavior | Smooth scrolling | On. Sends small wheel deltas. Turn it off for apps that expect whole 120-unit notches. |
 | Behavior | Momentum after a flick | Off. Releasing a hold-to-scroll while still moving keeps scrolling and slows to a stop within 1–2.5 seconds, depending on flick speed. Any click or wheel turn stops it, as does moving the pointer to another window. Requires smooth scrolling. |
-| Behavior | Double-click to lock scrolling | On. Double-click the same enabled trigger within 300 ms to scroll hands-free. Click an enabled trigger once to unlock. Left and right clicks still work while locked. |
+| Behavior | Double-click to lock scrolling | On. Double-click the same enabled trigger within 300 ms to scroll hands-free. Click an enabled trigger once to unlock. A left or right click also unlocks, and that click is not passed to the app. |
 | Behavior | Reverse scroll direction | Off. Reverses both axes. |
 | Behavior | Snap to dominant axis | Off. Scrolls freely in both axes. When enabled, chooses the axis with greater accumulated motion and switches only when the other axis exceeds three times the current axis's accumulated motion. |
 | Behavior | Scroll speed | Normal (1×). Also offers Slow (0.5×), Fast (2×), and Very fast (3×). |

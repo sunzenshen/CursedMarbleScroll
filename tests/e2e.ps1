@@ -639,10 +639,6 @@ try {
     $origin = [MouseTestDesktop]::Cursor()
     Send-Click
     Send-Click
-    [MouseTestDesktop]::Button([MouseTestDesktop]::LeftDown, 0)
-    [MouseTestDesktop]::Button([MouseTestDesktop]::LeftUp, 0)
-    [MouseTestDesktop]::Button([MouseTestDesktop]::RightDown, 0)
-    [MouseTestDesktop]::Button([MouseTestDesktop]::RightUp, 0)
     $desktop.Move($origin.X, $origin.Y + 20)
     Start-Sleep -Milliseconds 120
     $lockedCounts = $desktop.ReadCounts($false)
@@ -651,11 +647,6 @@ try {
         $lockedCounts.MiddleUp -eq 0 -and $lockedMovement -le 3
     Write-Result 'Double-click locks scrolling without holding a button' $locked "$lockedCounts, cursor moved $lockedMovement px"
     $results += $locked
-    $otherButtons = $lockedCounts.LeftDown -eq 1 -and $lockedCounts.LeftUp -eq 1 -and
-        $lockedCounts.RightDown -eq 1 -and $lockedCounts.RightUp -eq 1
-    Write-Result 'Left and right clicks pass through while locked' $otherButtons (
-        "left $($lockedCounts.LeftDown)/$($lockedCounts.LeftUp), right $($lockedCounts.RightDown)/$($lockedCounts.RightUp)")
-    $results += $otherButtons
 
     Send-Click
     $desktop.Move($origin.X, $origin.Y + 40)
@@ -666,6 +657,35 @@ try {
         $unlockedCounts.MiddleDown -eq 0 -and $unlockedCounts.MiddleUp -eq 0
     Write-Result 'One click unlocks and restores pointer movement' $unlocked "$unlockedCounts, cursor moved $unlockedMovement px"
     $results += $unlocked
+
+    foreach ($button in 'Left', 'Right') {
+        Move-ToStart
+        $origin = [MouseTestDesktop]::Cursor()
+        $null = $desktop.ReadCounts($true)
+        Send-Click
+        Send-Click
+        $desktop.Move($origin.X, $origin.Y + 20)
+        Start-Sleep -Milliseconds 120
+        $whileLocked = $desktop.ReadCounts($true)
+        [MouseTestDesktop]::Button([MouseTestDesktop]::($button + 'Down'), 0)
+        [MouseTestDesktop]::Button([MouseTestDesktop]::($button + 'Up'), 0)
+        $desktop.Move($origin.X, $origin.Y + 40)
+        Start-Sleep -Milliseconds 120
+        $afterUnlock = $desktop.ReadCounts($false)
+        $moved = Get-CursorDistance $origin ([MouseTestDesktop]::Cursor())
+        # The next click after unlocking reaches the app normally.
+        [MouseTestDesktop]::Button([MouseTestDesktop]::($button + 'Down'), 0)
+        [MouseTestDesktop]::Button([MouseTestDesktop]::($button + 'Up'), 0)
+        Start-Sleep -Milliseconds 80
+        $next = $desktop.ReadCounts($false)
+        $cancels = $whileLocked.VerticalTotal -lt 0 -and
+            $afterUnlock.($button + 'Down') -eq 0 -and $afterUnlock.($button + 'Up') -eq 0 -and
+            $afterUnlock.VerticalTotal -eq 0 -and $moved -ge 37 -and
+            $next.($button + 'Down') -eq 1 -and $next.($button + 'Up') -eq 1
+        Write-Result "$button click cancels scroll lock without clicking" $cancels (
+            "locked V=$($whileLocked.VerticalTotal); after unlock $afterUnlock, cursor moved $moved px; next click down/up=$($next.($button + 'Down'))/$($next.($button + 'Up'))")
+        $results += $cancels
+    }
 
     Move-ToStart
     $origin = [MouseTestDesktop]::Cursor()
