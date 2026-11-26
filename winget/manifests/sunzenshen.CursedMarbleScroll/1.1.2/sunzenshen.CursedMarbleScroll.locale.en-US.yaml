@@ -1,0 +1,20 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.9.0.schema.json
+PackageIdentifier: sunzenshen.CursedMarbleScroll
+PackageVersion: 1.1.2
+PackageLocale: en-US
+Publisher: sunzenshen
+PublisherUrl: https://github.com/sunzenshen
+PublisherSupportUrl: https://github.com/sunzenshen/CursedMarbleScroll/issues
+PackageName: CursedMarbleScroll
+PackageUrl: https://github.com/sunzenshen/CursedMarbleScroll
+License: MIT
+LicenseUrl: https://github.com/sunzenshen/CursedMarbleScroll/blob/master/LICENSE
+ShortDescription: Scroll with the trackball by holding a mouse button; a fork of MarbleScroll.
+Moniker: marblescroll
+Tags:
+- trackball
+- scroll
+- mouse
+ReleaseNotesUrl: https://github.com/sunzenshen/CursedMarbleScroll/releases/tag/v1.1.2
+ManifestType: defaultLocale
+ManifestVersion: 1.9.0
