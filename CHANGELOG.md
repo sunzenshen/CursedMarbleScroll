@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- A click followed quickly by motion now always replays at the press position. Previously the motion that ended the lock wait raced the replay, and if the output thread lost, the click could land on a neighboring link or tab.
+- The hook path is compiled before the hook is installed, removing a stall of about 8 ms on the first mouse event after launch.
+- Pressing an enabled button while scroll-locked always unlocks, even if the release of the locking click was missed.
+- Remote Desktop connect and disconnect now cancel gestures, and connect reinstalls the hook, matching console session switches.
+
 ## v1.1.1
 
 - Back and forward buttons both act as middle by default. Hold and move to scroll, or click without moving to replay a middle click. One tray toggle restores normal back and forward input.

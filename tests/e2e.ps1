@@ -23,6 +23,7 @@ public sealed class MouseTestDesktop : IDisposable
         public int MiddleDown, MiddleUp, XDown, XUp, LeftDown, LeftUp, RightDown, RightUp;
         public int VerticalTotal, HorizontalTotal, PartialWheel, SubNotchWheel;
         public int LastXDown, LastXUp;
+        public Point LastMiddleDown;
 
         internal Counts Snapshot()
         {
@@ -65,7 +66,11 @@ public sealed class MouseTestDesktop : IDisposable
                 case 0x0204: MouseCounts.RightDown++; break;
                 case 0x0205: MouseCounts.RightUp++; break;
                 case 0x0207:
-                case 0x0209: MouseCounts.MiddleDown++; break;
+                case 0x0209:
+                    MouseCounts.MiddleDown++;
+                    long position = message.LParam.ToInt64();
+                    MouseCounts.LastMiddleDown = PointToScreen(new Point((short)position, (short)(position >> 16)));
+                    break;
                 case 0x0208: MouseCounts.MiddleUp++; break;
                 case 0x020B:
                 case 0x020D:
@@ -559,6 +564,23 @@ try {
         Write-Result "$name single click replays as middle after the default lock window" $single "at ${earlyMs}ms $early; at ${replayMs}ms $late"
         $results += $single
     }
+
+    Move-ToStart
+    $origin = [MouseTestDesktop]::Cursor()
+    $null = $desktop.ReadCounts($true)
+    Send-Click
+    Start-Sleep -Milliseconds 50
+    # Moving within the lock window ends the wait. The replay must land where the button was pressed.
+    $desktop.Move($origin.X, $origin.Y + 30)
+    Start-Sleep -Milliseconds 150
+    $moved = $desktop.ReadCounts($false)
+    $desktop.Move($origin.X, $origin.Y + 40)
+    Start-Sleep -Milliseconds 80
+    $resumed = Get-CursorDistance $origin ([MouseTestDesktop]::Cursor())
+    $offset = Get-CursorDistance $origin $moved.LastMiddleDown
+    $inPlace = $moved.MiddleDown -eq 1 -and $moved.MiddleUp -eq 1 -and $offset -le 3 -and $resumed -ge 37
+    Write-Result 'Click followed by motion replays at the press position' $inPlace "$moved, click offset $offset px, cursor then moved $resumed px"
+    $results += $inPlace
 
     $null = $desktop.ReadCounts($true)
     $origin = [MouseTestDesktop]::Cursor()

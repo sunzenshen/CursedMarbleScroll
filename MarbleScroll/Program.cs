@@ -87,10 +87,12 @@ namespace MarbleScroll
                 {
                     case SessionSwitchReason.SessionUnlock:
                     case SessionSwitchReason.ConsoleConnect:
+                    case SessionSwitchReason.RemoteConnect:
                         scroll.Reset(true);
                         break;
                     case SessionSwitchReason.SessionLock:
                     case SessionSwitchReason.ConsoleDisconnect:
+                    case SessionSwitchReason.RemoteDisconnect:
                         scroll.Reset(false);
                         break;
                 }

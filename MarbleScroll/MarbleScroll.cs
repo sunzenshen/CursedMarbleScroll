@@ -2,6 +2,8 @@
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Windows.Forms;
@@ -179,6 +181,7 @@ namespace MarbleScroll
                 });
                 if (stopping)
                     throw new OperationCanceledException("Mouse hook startup was canceled.");
+                PrepareHookPath();
                 // Install before WinForms creates the hook thread's marshaling window.
                 InstallHook();
 
@@ -229,6 +232,48 @@ namespace MarbleScroll
                 }
                 if (!started)
                     ready.Set();
+            }
+        }
+
+        // Compile the callback path before Windows waits on it, so the first event after launch does not stall.
+        private static void PrepareHookPath()
+        {
+            try
+            {
+                const BindingFlags declared = BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public |
+                    BindingFlags.NonPublic | BindingFlags.DeclaredOnly;
+                foreach (Type type in new[] { typeof(MarbleScroll), typeof(ScrollEngine) })
+                {
+                    foreach (MethodInfo method in type.GetMethods(declared))
+                    {
+                        if (!method.IsAbstract && !method.ContainsGenericParameters &&
+                            (method.Attributes & MethodAttributes.PinvokeImpl) == 0)
+                            RuntimeHelpers.PrepareMethod(method.MethodHandle);
+                    }
+                }
+                Marshal.PrelinkAll(typeof(MarbleScroll));
+
+                // Run generic collection code that the framework does not precompile for these types.
+                var probe = new ScrollEngine(new ScrollSettings());
+                probe.ButtonDown(ScrollButton.Middle, 0);
+                probe.Move(3, 3, 1);
+                probe.ButtonUp(ScrollButton.Middle, 2);
+
+                IntPtr buffer = Marshal.AllocHGlobal(Marshal.SizeOf(typeof(MSLLHOOKSTRUCT)));
+                try
+                {
+                    Marshal.PtrToStructure(buffer, typeof(MSLLHOOKSTRUCT));
+                }
+                finally
+                {
+                    Marshal.FreeHGlobal(buffer);
+                }
+                RootAt(default(POINT));
+            }
+            catch (Exception error)
+            {
+                // Warm-up is only an optimization.
+                Debug.WriteLine(error);
             }
         }
 
@@ -358,6 +403,7 @@ namespace MarbleScroll
             ScrollState before = engine.State;
             ScrollDecision decision;
             ClickContext replay = waitingClick;
+            bool holdPointer = false;
             switch (message)
             {
                 case MouseMessage.Move:
@@ -377,6 +423,9 @@ namespace MarbleScroll
                     if (decision.ReplayButton != ScrollButton.None && replay.Delayed &&
                         RootAt(mouse.pt) != replay.Root)
                         replay = default(ClickContext);
+                    // Motion that ends the lock wait would otherwise move the replayed click off its target.
+                    holdPointer = before == ScrollState.WaitingForSecondClick &&
+                        decision.ReplayButton != ScrollButton.None && replay.Button != ScrollButton.None;
                     break;
                 case MouseMessage.MiddleDown:
                 case MouseMessage.XDown:
@@ -387,6 +436,12 @@ namespace MarbleScroll
                         // Mouse buttons do not auto-repeat. A second hardware down can recover a missed up.
                         ResetGesture();
                         before = ScrollState.Normal;
+                    }
+                    else if (before == ScrollState.LockedScroll && engine.Owns(button) &&
+                        (mouse.flags & InjectedFlag) == 0)
+                    {
+                        // The locking click's release was missed. Let this down unlock instead of being swallowed.
+                        engine.ForgetDown(button);
                     }
                     if (before == ScrollState.Normal)
                     {
@@ -471,7 +526,7 @@ namespace MarbleScroll
                 AdvanceGesture(now);
                 return false;
             }
-            return decision.Kind != DecisionKind.Pass;
+            return decision.Kind != DecisionKind.Pass || holdPointer;
         }
 
         private static int ButtonMask(ScrollButton button)
