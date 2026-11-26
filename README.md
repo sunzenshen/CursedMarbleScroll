@@ -14,6 +14,7 @@ Run `MarbleScroll.exe` and right-click its tray icon. Only one instance runs per
 | Triggers | Scroll on middle button | On. Hold the middle button and move to scroll. |
 | Triggers | Side buttons act as middle (scroll + middle click) | On. Hold either the back (XBUTTON1) or forward (XBUTTON2) button and move to scroll. A stationary press replays a middle click. Turn this off to restore normal back and forward input. |
 | Behavior | Smooth scrolling | On. Sends small wheel deltas. Turn it off for apps that expect whole 120-unit notches. |
+| Behavior | Momentum after a flick | Off. Releasing a hold-to-scroll while still moving keeps scrolling and slows to a stop within 1–2.5 seconds, depending on flick speed. Any click or wheel turn stops it, as does moving the pointer to another window. Requires smooth scrolling. |
 | Behavior | Double-click to lock scrolling | On. Double-click the same enabled trigger within 300 ms to scroll hands-free. Click an enabled trigger once to unlock. Left and right clicks still work while locked. |
 | Behavior | Reverse scroll direction | Off. Reverses both axes. |
 | Behavior | Snap to dominant axis | Off. Scrolls freely in both axes. When enabled, chooses the axis with greater accumulated motion and switches only when the other axis exceeds three times the current axis's accumulated motion. |
@@ -40,6 +41,7 @@ Launch overrides apply to the current run. Use the tray menu to change saved cho
 | `--lock-window-ms <milliseconds>` | Overrides the lock window for this run (150–1000 ms). |
 | `--no-side-buttons` | Passes the back and forward buttons through as ordinary side buttons. |
 | `--snap-to-axis` | Enables dominant-axis snapping. |
+| `--momentum` / `--no-momentum` | Enables or disables momentum after a flick. |
 | `--notches` | Sends only whole wheel notches. |
 | `--paused` | Starts paused. |
 | `--lock-idle-ms <milliseconds>` | Overrides the locked-scroll idle timeout for testing. |

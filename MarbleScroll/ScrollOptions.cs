@@ -18,6 +18,7 @@ namespace MarbleScroll
         public int LockWindowMs = ScrollSettings.DefaultLockWindowMs;
         public bool Reverse;
         public bool SnapToAxis;
+        public bool Momentum;
         public bool Paused;
         public double Speed = 1;
 
@@ -87,6 +88,7 @@ namespace MarbleScroll
                     LockEnabled = settings.LockEnabled,
                     Reverse = settings.Reverse,
                     SnapToAxis = settings.SnapToAxis,
+                    Momentum = settings.Momentum,
                     Paused = settings.Paused,
                     Speed = ParseSpeed(settings.ScrollSpeed)
                 };

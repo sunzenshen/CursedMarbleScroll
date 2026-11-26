@@ -44,6 +44,8 @@ namespace MarbleScroll
             contextMenuStrip1.Items.Add(new ToolStripSeparator());
             AddToggle("Smooth scrolling", options.SmoothScrolling,
                 value => { options.SmoothScrolling = value; change(() => settings.SmoothScrolling = value); });
+            AddToggle("Momentum after a flick", options.Momentum,
+                value => { options.Momentum = value; change(() => settings.Momentum = value); });
             AddToggle("Double-click to lock scrolling", options.LockEnabled,
                 value => { options.LockEnabled = value; change(() => settings.LockEnabled = value); });
             AddToggle("Reverse scroll direction", options.Reverse,

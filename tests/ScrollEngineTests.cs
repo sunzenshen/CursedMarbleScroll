@@ -18,6 +18,8 @@ internal static class ScrollEngineTests
             LockAndUnlock();
             InterclickMovement();
             TimeReset();
+            ReleaseVelocity();
+            MomentumGlide();
             Console.WriteLine("ScrollEngine tests passed.");
             return 0;
         }
@@ -236,5 +238,102 @@ internal static class ScrollEngineTests
         Equal(ScrollState.Normal, engine.State, "backwards time resets lock");
         Equal(false, engine.PendingDeadlineMs.HasValue, "backwards time clears deadline");
         Equal(DecisionKind.Suppress, Click(engine, 2).Kind, "new timeline accepts clicks");
+    }
+
+    // Drags at a steady pace of dy pixels every 8 ms, from t = 8 to t = 80.
+    private static ScrollEngine Drag(double dy)
+    {
+        var engine = Engine();
+        engine.ButtonDown(Middle, 0);
+        for (int t = 8; t <= 80; t += 8)
+            engine.Move(0, dy, t);
+        return engine;
+    }
+
+    private static void Near(double expected, double actual, double tolerance, string description)
+    {
+        if (Math.Abs(expected - actual) > tolerance)
+            throw new InvalidOperationException(description + ": expected " + expected + " ± " + tolerance + ", got " + actual);
+    }
+
+    private static void ReleaseVelocity()
+    {
+        double x, y;
+        var engine = Drag(4);
+        engine.ButtonUp(Middle, 85);
+        Equal(true, engine.TakeReleaseVelocity(out x, out y), "flick has release velocity");
+        Near(0, x, 1e-9, "flick horizontal velocity");
+        Near(-2, y, 1e-9, "flick vertical velocity (16 units per 8 ms)");
+        Equal(false, engine.TakeReleaseVelocity(out x, out y), "velocity is taken once");
+
+        engine = Drag(4);
+        engine.ButtonUp(Middle, 80 + ScrollEngine.StaleReleaseMs + 1);
+        Equal(false, engine.TakeReleaseVelocity(out x, out y), "stopping before release does not glide");
+
+        engine = Drag(1);
+        engine.ButtonUp(Middle, 85);
+        Equal(false, engine.TakeReleaseVelocity(out x, out y), "slow drag does not glide");
+
+        engine = Drag(200);
+        engine.ButtonUp(Middle, 85);
+        Equal(true, engine.TakeReleaseVelocity(out x, out y), "fast flick glides");
+        Near(-ScrollEngine.MaxReleaseVelocity, y, 1e-9, "release velocity is capped");
+
+        engine = Engine();
+        engine.SetLockEnabled(false);
+        Click(engine, 0);
+        Equal(false, engine.TakeReleaseVelocity(out x, out y), "click does not glide");
+
+        engine = Engine();
+        Click(engine, 0);
+        Click(engine, 100);
+        for (int t = 108; t <= 180; t += 8)
+            engine.Move(0, 4, t);
+        engine.ButtonDown(Middle, 182);
+        engine.ButtonUp(Middle, 184);
+        Equal(false, engine.TakeReleaseVelocity(out x, out y), "unlocking a locked scroll does not glide");
+
+        engine = Drag(4);
+        engine.ButtonUp(Middle, 85);
+        engine.ButtonDown(Middle, 90);
+        Equal(false, engine.TakeReleaseVelocity(out x, out y), "a new press discards the release velocity");
+    }
+
+    private static int Glide(double velocity, int stepMs, out int steps)
+    {
+        var momentum = new Momentum();
+        momentum.Start(0, velocity, 0);
+        int total = 0;
+        steps = 0;
+        for (int t = stepMs; momentum.Active && steps < 10000; t += stepMs, steps++)
+        {
+            int x, y;
+            momentum.Step(t, out x, out y);
+            Equal(0, x, "glide stays on its axis");
+            total += y;
+        }
+        Equal(false, momentum.Active, "glide stops by itself");
+        return total;
+    }
+
+    private static void MomentumGlide()
+    {
+        int steps;
+        // Total distance is velocity × decay time, less the tail below the stop velocity.
+        int total = Glide(-2, 8, out steps);
+        Near(-2 * Momentum.DecayMs, total, Momentum.StopVelocity * Momentum.DecayMs + 2, "glide distance");
+        Near(Momentum.DecayMs * Math.Log(2 / Momentum.StopVelocity) / 8, steps, 2, "glide duration");
+        Near(total, Glide(-2, 16, out steps), 2, "distance does not depend on the step rate");
+
+        var momentum = new Momentum();
+        momentum.Start(0, Momentum.StopVelocity / 2, 0);
+        Equal(false, momentum.Active, "tiny velocity does not glide");
+        momentum.Start(double.NaN, 1, 0);
+        Equal(false, momentum.Active, "invalid velocity does not glide");
+        momentum.Start(0, 1, 100);
+        int gx, gy;
+        momentum.Step(50, out gx, out gy);
+        Equal(false, momentum.Active, "backwards time stops the glide");
+        Equal(0, gy, "backwards time emits nothing");
     }
 }

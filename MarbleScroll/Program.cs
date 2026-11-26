@@ -45,6 +45,10 @@ namespace MarbleScroll
                     options.SideButtonsActAsMiddle = false;
                 if (Array.IndexOf(args, "--snap-to-axis") >= 0)
                     options.SnapToAxis = true;
+                if (Array.IndexOf(args, "--momentum") >= 0)
+                    options.Momentum = true;
+                if (Array.IndexOf(args, "--no-momentum") >= 0)
+                    options.Momentum = false;
                 options.LockWindowMs = ScrollSettings.BoundLockWindow(
                     ReadPositiveOption(args, "--lock-window-ms", options.LockWindowMs));
                 if (Array.IndexOf(args, "--paused") >= 0)

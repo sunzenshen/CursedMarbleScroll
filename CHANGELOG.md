@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Optional momentum: with **Momentum after a flick** enabled, releasing a hold-to-scroll while still moving keeps scrolling and decays to a stop. Clicks, wheel turns, and moving to another window stop it. Off by default.
 - A click followed quickly by motion now always replays at the press position. Previously the motion that ended the lock wait raced the replay, and if the output thread lost, the click could land on a neighboring link or tab.
 - The hook path is compiled before the hook is installed, removing a stall of about 8 ms on the first mouse event after launch.
 - Pressing an enabled button while scroll-locked always unlocks, even if the release of the locking click was missed.

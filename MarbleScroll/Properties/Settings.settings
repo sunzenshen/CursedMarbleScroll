@@ -28,6 +28,9 @@
     <Setting Name="SnapToAxis" Type="System.Boolean" Scope="User">
       <Value Profile="(Default)">False</Value>
     </Setting>
+    <Setting Name="Momentum" Type="System.Boolean" Scope="User">
+      <Value Profile="(Default)">False</Value>
+    </Setting>
     <Setting Name="Paused" Type="System.Boolean" Scope="User">
       <Value Profile="(Default)">False</Value>
     </Setting>

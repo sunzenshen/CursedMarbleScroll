@@ -541,6 +541,59 @@ try {
             $counts.VerticalTotal -le -480 -and $counts.VerticalTotal -ge -600 -and $gesture.MaxMovement -le 3
     }
 
+    # Flick: a fast steady drag released while still moving. Moves are measured from the frozen point.
+    function Invoke-Flick {
+        Move-ToStart
+        $null = $desktop.ReadCounts($true)
+        [MouseTestDesktop]::Button([MouseTestDesktop]::MiddleDown, 0)
+        try {
+            for ($step = 1; $step -le 10; $step++) {
+                $desktop.Move($startX, $startY + 8)
+                Start-Sleep -Milliseconds 10
+            }
+        }
+        finally {
+            [MouseTestDesktop]::Button([MouseTestDesktop]::MiddleUp, 0)
+        }
+        Start-Sleep -Milliseconds 30
+        return $desktop.ReadCounts($false)
+    }
+
+    Stop-MarbleScroll
+    Start-MarbleScroll '--defaults'
+    $released = Invoke-Flick
+    Start-Sleep -Milliseconds 800
+    $after = $desktop.ReadCounts($false)
+    $noGlide = $released.VerticalTotal -lt 0 -and $after.VerticalTotal -eq $released.VerticalTotal
+    Write-Result 'A flick stops on release when momentum is off' $noGlide "at release V=$($released.VerticalTotal), later V=$($after.VerticalTotal)"
+    $results += $noGlide
+
+    Stop-MarbleScroll
+    Start-MarbleScroll '--defaults --momentum'
+    $released = Invoke-Flick
+    Start-Sleep -Milliseconds 2000
+    $glided = $desktop.ReadCounts($false)
+    Start-Sleep -Milliseconds 800
+    $settled = $desktop.ReadCounts($false)
+    $glide = $released.VerticalTotal - $glided.VerticalTotal
+    $momentumGlide = $glide -ge 120 -and $glided.WheelUp -eq 0 -and $settled.VerticalTotal -eq $glided.VerticalTotal -and
+        $glided.MiddleDown -eq 0 -and $glided.MiddleUp -eq 0
+    Write-Result 'A flick glides after release and then stops' $momentumGlide "gesture V=$($released.VerticalTotal), glide $glide units, $glided"
+    $results += $momentumGlide
+
+    $released = Invoke-Flick
+    Start-Sleep -Milliseconds 70
+    [MouseTestDesktop]::Button([MouseTestDesktop]::LeftDown, 0)
+    [MouseTestDesktop]::Button([MouseTestDesktop]::LeftUp, 0)
+    Start-Sleep -Milliseconds 60
+    $clicked = $desktop.ReadCounts($false)
+    Start-Sleep -Milliseconds 800
+    $later = $desktop.ReadCounts($false)
+    $stopGlide = $later.VerticalTotal -eq $clicked.VerticalTotal -and
+        ($released.VerticalTotal - $later.VerticalTotal) -lt $glide -and $later.LeftDown -eq 1
+    Write-Result 'A click stops the glide' $stopGlide "glide before click $($released.VerticalTotal - $clicked.VerticalTotal) units, after click $($clicked.VerticalTotal - $later.VerticalTotal) units"
+    $results += $stopGlide
+
     Stop-MarbleScroll
     Start-MarbleScroll '--defaults'
     $interval = 300

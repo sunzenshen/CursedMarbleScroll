@@ -28,7 +28,7 @@ namespace MarbleScroll
         private Exception startupError;
         private volatile Exception hookFailure;
         private volatile Control dispatcher;
-        private volatile bool stopping, outputFailed, senderUnavailable;
+        private volatile bool stopping, outputFailed, senderUnavailable, gliding;
         private volatile int forwardedButtons;
         private volatile ScrollState state;
         private IntPtr hookID;
@@ -130,7 +130,8 @@ namespace MarbleScroll
                         idleButton == ScrollButton.X1 || idleButton == ScrollButton.X2)) ||
                     (engine.State == ScrollState.LockedScroll && !snapshot.LockEnabled);
                 bool outputChanged = options.Speed != snapshot.Speed || options.Reverse != snapshot.Reverse ||
-                    options.SmoothScrolling != snapshot.SmoothScrolling || options.SnapToAxis != snapshot.SnapToAxis;
+                    options.SmoothScrolling != snapshot.SmoothScrolling || options.SnapToAxis != snapshot.SnapToAxis ||
+                    options.Momentum != snapshot.Momentum;
                 options = snapshot;
                 if (cancelGesture)
                     ResetGesture();
@@ -398,12 +399,15 @@ namespace MarbleScroll
         private bool HandleMouse(MouseMessage message, MSLLHOOKSTRUCT mouse)
         {
             double now = clock.Elapsed.TotalMilliseconds;
+            if (gliding && message != MouseMessage.Move)
+                InvalidateOutput(); // Any click or physical wheel turn stops momentum.
             AdvanceGesture(now);
             lastInput = now;
             ScrollState before = engine.State;
             ScrollDecision decision;
             ClickContext replay = waitingClick;
             bool holdPointer = false;
+            Output glide = null;
             switch (message)
             {
                 case MouseMessage.Move:
@@ -490,6 +494,17 @@ namespace MarbleScroll
                     if (!engine.Owns(released))
                         return false;
                     decision = engine.ButtonUp(released, now);
+                    if (engine.TakeReleaseVelocity(out double velocityX, out double velocityY) &&
+                        before == ScrollState.TemporaryScroll && options.Momentum && options.SmoothScrolling)
+                    {
+                        glide = new Output
+                        {
+                            Momentum = true,
+                            VelocityX = velocityX,
+                            VelocityY = velocityY,
+                            Root = RootAt(mouse.pt)
+                        };
+                    }
                     if (released == idleButton)
                     {
                         replay = idleClick;
@@ -521,6 +536,8 @@ namespace MarbleScroll
                 waitingClick = default(ClickContext);
             state = engine.State;
             ApplyDecision(decision, replay);
+            if (glide != null)
+                Enqueue(glide); // After the gesture's final deltas.
             if (message == MouseMessage.Move && outputFailed)
             {
                 AdvanceGesture(now);
@@ -592,6 +609,7 @@ namespace MarbleScroll
             Interlocked.Increment(ref generation);
             outputQueue.Clear();
             queueTail = null;
+            gliding = false; // Any queued or running glide belongs to the old generation.
             releaseRequested = true;
             Monitor.Pulse(outputQueue);
         }
@@ -604,7 +622,7 @@ namespace MarbleScroll
                     return;
                 output.Generation = generation;
                 if (output.Click.Button == ScrollButton.None && queueTail != null &&
-                    queueTail.Click.Button == ScrollButton.None &&
+                    queueTail.Click.Button == ScrollButton.None && !output.Momentum && !queueTail.Momentum &&
                     Math.Abs(queueTail.X + output.X) <= 32767 &&
                     Math.Abs(queueTail.Y + output.Y) <= 32767)
                 {
@@ -615,6 +633,9 @@ namespace MarbleScroll
                 {
                     outputQueue.Enqueue(output);
                     queueTail = output;
+                    // Set while queued so input that arrives before the glide starts still cancels it.
+                    if (output.Momentum)
+                        gliding = true;
                 }
                 else
                 {
@@ -628,18 +649,35 @@ namespace MarbleScroll
         private void EmitOutput()
         {
             double nextWheel = 0;
+            var momentum = new Momentum();
+            int momentumGeneration = 0;
+            IntPtr momentumRoot = IntPtr.Zero;
             try
             {
                 while (true)
                 {
                     Output output = null;
+                    bool step = false;
                     lock (outputQueue)
                     {
                         while (!stopping && !releaseRequested)
                         {
+                            if (momentum.Active && momentumGeneration != generation)
+                                momentum.Stop(); // Invalidation already cleared the flag.
                             if (outputQueue.Count == 0)
                             {
-                                Monitor.Wait(outputQueue);
+                                if (!momentum.Active)
+                                {
+                                    Monitor.Wait(outputQueue);
+                                    continue;
+                                }
+                                double wait = nextWheel - clock.Elapsed.TotalMilliseconds;
+                                if (wait <= 0)
+                                {
+                                    step = true;
+                                    break;
+                                }
+                                Monitor.Wait(outputQueue, (int)Math.Ceiling(wait));
                                 continue;
                             }
                             double delay = nextWheel - clock.Elapsed.TotalMilliseconds;
@@ -659,9 +697,35 @@ namespace MarbleScroll
                         ReleaseSyntheticButton();
                     if (stopping)
                         return;
+                    if (step)
+                    {
+                        double now = clock.Elapsed.TotalMilliseconds;
+                        // Wheel input goes to the window under the pointer, so stop if that changes.
+                        if (momentumGeneration != Volatile.Read(ref generation) ||
+                            !GetPhysicalCursorPos(out POINT point) || RootAt(point) != momentumRoot)
+                        {
+                            EndGlide(momentum, momentumGeneration);
+                            continue;
+                        }
+                        momentum.Step(now, out int glideX, out int glideY);
+                        nextWheel = now + 8;
+                        EmitWheel(new Output { X = glideX, Y = glideY, Generation = momentumGeneration });
+                        if (!momentum.Active)
+                            EndGlide(momentum, momentumGeneration);
+                        continue;
+                    }
                     if (output == null || !IsCurrent(output))
                         continue;
 
+                    if (output.Momentum)
+                    {
+                        momentum.Start(output.VelocityX, output.VelocityY, clock.Elapsed.TotalMilliseconds);
+                        momentumGeneration = output.Generation;
+                        momentumRoot = output.Root;
+                        if (!momentum.Active)
+                            EndGlide(momentum, momentumGeneration);
+                        continue;
+                    }
                     if (output.Click.Button != ScrollButton.None)
                         EmitClick(output);
                     else
@@ -683,6 +747,7 @@ namespace MarbleScroll
             }
             finally
             {
+                gliding = false;
                 try
                 {
                     if (outstandingRelease != null)
@@ -692,6 +757,17 @@ namespace MarbleScroll
                 {
                     Debug.WriteLine(error);
                 }
+            }
+        }
+
+        private void EndGlide(Momentum momentum, int glideGeneration)
+        {
+            momentum.Stop();
+            lock (outputQueue)
+            {
+                // A newer generation owns the flag, possibly for a glide that is already queued.
+                if (glideGeneration == generation)
+                    gliding = false;
             }
         }
 
@@ -789,6 +865,10 @@ namespace MarbleScroll
         {
             public int X, Y, Generation;
             public ClickContext Click;
+            // A momentum start carries the release velocity and the window that was being scrolled.
+            public bool Momentum;
+            public double VelocityX, VelocityY;
+            public IntPtr Root;
         }
 
         private delegate IntPtr LowLevelMouseProc(int nCode, IntPtr wParam, IntPtr lParam);
@@ -796,6 +876,10 @@ namespace MarbleScroll
         private enum MouseMessage
         {
             Move = 0x0200,
+            LeftDown = 0x0201,
+            RightDown = 0x0204,
+            Wheel = 0x020A,
+            HorizontalWheel = 0x020E,
             MiddleDown = 0x0207,
             MiddleUp = 0x0208,
             XDown = 0x020B,

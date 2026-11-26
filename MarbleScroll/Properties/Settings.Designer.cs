@@ -93,6 +93,14 @@ namespace MarbleScroll.Properties
 
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool Momentum
+        {
+            get { return (bool)this["Momentum"]; }
+            set { this["Momentum"] = value; }
+        }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
         public bool Paused
         {
             get { return (bool)this["Paused"]; }

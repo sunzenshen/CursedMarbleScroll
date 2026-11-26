@@ -79,6 +79,16 @@ namespace MarbleScroll
         private double firstDown, travel, pendingX, pendingY, remainderX, remainderY;
         private ScrollButton trigger;
 
+        // Recent wheel output, used to estimate the velocity at release for momentum.
+        internal const double VelocityWindowMs = 75, StaleReleaseMs = 50;
+        internal const double MinReleaseVelocity = 1, MaxReleaseVelocity = 25; // Wheel units per ms.
+        private const int SampleCount = 32;
+        private readonly double[] sampleTime = new double[SampleCount];
+        private readonly int[] sampleX = new int[SampleCount], sampleY = new int[SampleCount];
+        private int sampleNext, samples;
+        private double moveTime, releaseX, releaseY;
+        private bool hasRelease;
+
         public ScrollState State { get; private set; }
         public double? PendingDeadlineMs
         {
@@ -189,6 +199,7 @@ namespace MarbleScroll
                 }
                 else if (State == ScrollState.TemporaryScroll)
                 {
+                    CaptureReleaseVelocity(timeMs);
                     State = ScrollState.Normal;
                 }
             }
@@ -205,6 +216,7 @@ namespace MarbleScroll
                 Reset();
                 return new ScrollDecision(DecisionKind.Pass, replayButton: replay);
             }
+            moveTime = timeMs;
 
             switch (State)
             {
@@ -274,6 +286,69 @@ namespace MarbleScroll
         {
             axis = Axis.None;
             motionX = motionY = remainderX = remainderY = 0;
+            samples = sampleNext = 0;
+            hasRelease = false;
+        }
+
+        // Returns the wheel velocity (units per ms) of a scroll released while still moving, once.
+        public bool TakeReleaseVelocity(out double x, out double y)
+        {
+            bool has = hasRelease;
+            x = has ? releaseX : 0;
+            y = has ? releaseY : 0;
+            hasRelease = false;
+            return has;
+        }
+
+        private void Record(int h, int v)
+        {
+            sampleTime[sampleNext] = moveTime;
+            sampleX[sampleNext] = h;
+            sampleY[sampleNext] = v;
+            sampleNext = (sampleNext + 1) % SampleCount;
+            samples = Math.Min(samples + 1, SampleCount);
+        }
+
+        private void CaptureReleaseVelocity(double timeMs)
+        {
+            hasRelease = false;
+            if (samples < 2)
+                return;
+            int newest = (sampleNext + SampleCount - 1) % SampleCount;
+            double newestTime = sampleTime[newest];
+            if (timeMs - newestTime > StaleReleaseMs)
+                return; // The pointer had stopped before release.
+
+            // Each sample holds the output since the previous sample, so the oldest sample in the
+            // window only marks where the measured interval starts.
+            double sumX = 0, sumY = 0, oldestTime = newestTime;
+            for (int i = 0; i < samples; i++)
+            {
+                int k = (newest - i + SampleCount) % SampleCount;
+                if (newestTime - sampleTime[k] > VelocityWindowMs)
+                    break;
+                if (i > 0)
+                {
+                    sumX += sampleX[(k + 1) % SampleCount];
+                    sumY += sampleY[(k + 1) % SampleCount];
+                }
+                oldestTime = sampleTime[k];
+            }
+            double span = newestTime - oldestTime;
+            if (span <= 0)
+                return;
+            double x = sumX / span, y = sumY / span;
+            double speed = Distance(x, y);
+            if (speed < MinReleaseVelocity)
+                return;
+            if (speed > MaxReleaseVelocity)
+            {
+                x *= MaxReleaseVelocity / speed;
+                y *= MaxReleaseVelocity / speed;
+            }
+            releaseX = x;
+            releaseY = y;
+            hasRelease = true;
         }
 
         private ScrollDecision FlushMotion(double dx, double dy)
@@ -310,6 +385,7 @@ namespace MarbleScroll
             int v = (int)vy;
             remainderX = hx - h;
             remainderY = vy - v;
+            Record(h, v);
             return new ScrollDecision(DecisionKind.Scroll, h, v);
         }
 
@@ -319,6 +395,60 @@ namespace MarbleScroll
         private static double Bound(double x, double min, double max, double fallback)
         {
             return IsFinite(x) ? Clamp(x, min, max) : fallback;
+        }
+    }
+
+    // Exponentially decaying glide in wheel units. Steps integrate the decay exactly, so the
+    // distance covered does not depend on how often Step is called.
+    internal sealed class Momentum
+    {
+        internal const double DecayMs = 400;
+        internal const double StopVelocity = 0.05; // Wheel units per ms.
+        private double velocityX, velocityY, lastTime, remainderX, remainderY;
+
+        public bool Active { get; private set; }
+
+        public void Start(double x, double y, double timeMs)
+        {
+            bool valid = !double.IsNaN(x) && !double.IsInfinity(x) && !double.IsNaN(y) && !double.IsInfinity(y) &&
+                !double.IsNaN(timeMs) && !double.IsInfinity(timeMs);
+            velocityX = valid ? x : 0;
+            velocityY = valid ? y : 0;
+            lastTime = timeMs;
+            remainderX = remainderY = 0;
+            Active = valid && Math.Sqrt(x * x + y * y) >= StopVelocity;
+        }
+
+        public void Stop()
+        {
+            Active = false;
+            velocityX = velocityY = 0;
+        }
+
+        public void Step(double timeMs, out int x, out int y)
+        {
+            x = y = 0;
+            if (!Active)
+                return;
+            double elapsed = timeMs - lastTime;
+            if (double.IsNaN(elapsed) || elapsed < 0)
+            {
+                Stop();
+                return;
+            }
+            lastTime = timeMs;
+            double decay = Math.Exp(-elapsed / DecayMs);
+            double travel = DecayMs * (1 - decay);
+            double hx = velocityX * travel + remainderX;
+            double vy = velocityY * travel + remainderY;
+            x = (int)hx;
+            y = (int)vy;
+            remainderX = hx - x;
+            remainderY = vy - y;
+            velocityX *= decay;
+            velocityY *= decay;
+            if (Math.Sqrt(velocityX * velocityX + velocityY * velocityY) < StopVelocity)
+                Stop();
         }
     }
 }
