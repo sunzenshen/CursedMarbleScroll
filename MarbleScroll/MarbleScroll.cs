@@ -178,6 +178,7 @@ namespace MarbleScroll
                 {
                     LockEnabled = options.LockEnabled,
                     LockWindowMs = options.LockWindowMs,
+                    ClickSlop = ScrollSettings.DefaultClickSlop,
                     Reverse = options.Reverse,
                     Speed = options.Speed,
                     SnapToAxis = options.SnapToAxis

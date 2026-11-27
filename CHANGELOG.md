@@ -3,6 +3,7 @@
 ## Unreleased
 
 - A left or right click while scroll-locked now unlocks instead of clicking. The click and its release are not passed to the app.
+- A quick press that moves a little is now a click. A press released within 200 ms that moved less than 16 px replays a middle click at the press position, right away and without the lock wait. Scrolling starts once either limit is passed.
 - Optional momentum: with **Momentum after a flick** enabled, releasing a hold-to-scroll while still moving keeps scrolling and decays to a stop. Clicks, wheel turns, and moving to another window stop it. Off by default.
 - A click followed quickly by motion now always replays at the press position. Previously the motion that ended the lock wait raced the replay, and if the output thread lost, the click could land on a neighboring link or tab.
 - The hook path is compiled before the hook is installed, removing a stall of about 8 ms on the first mouse event after launch.
