@@ -17,6 +17,7 @@ internal static class ScrollEngineTests
             ClickTiming();
             LockAndUnlock();
             InterclickMovement();
+            MovingClick();
             TimeReset();
             ReleaseVelocity();
             MomentumGlide();
@@ -226,6 +227,39 @@ internal static class ScrollEngineTests
         Equal(Middle, move.ReplayButton, "motion cancels lock recognition and replays click");
         engine.ButtonDown(Middle, 32);
         Equal(ScrollState.ButtonPressed, engine.State, "next press starts a new click");
+    }
+
+    private static void MovingClick()
+    {
+        var settings = new ScrollSettings { ClickSlop = 16 };
+        var engine = new ScrollEngine(settings);
+        engine.ButtonDown(Middle, 0);
+        Equal(DecisionKind.Suppress, engine.Move(6, 0, 20).Kind, "short move inside the slop is buffered");
+        Equal(ScrollState.ButtonPressed, engine.State, "still a candidate click");
+        var up = engine.ButtonUp(Middle, 60);
+        Equal(DecisionKind.ReplayClick, up.Kind, "quick moving press replays without the lock wait");
+        Equal(Middle, up.ReplayButton, "moving click button");
+        Equal(ScrollState.Normal, engine.State, "moving click does not wait for a second click");
+
+        engine.ButtonDown(Middle, 100);
+        engine.Move(10, 0, 110);
+        Units(engine.Move(6, 0, 120), 16, 0, "reaching the slop scrolls and flushes the buffer");
+        Equal(DecisionKind.Suppress, engine.ButtonUp(Middle, 130).Kind, "scroll release is not a click");
+
+        engine.ButtonDown(Middle, 1000);
+        engine.Move(3, 0, 1010);
+        Units(engine.Move(1, 0, 1200), 4, 0, "grace period ending scrolls and flushes the buffer");
+        engine.ButtonUp(Middle, 1210);
+
+        engine.ButtonDown(Middle, 2000);
+        engine.Move(3, 0, 2010);
+        Units(engine.ButtonUp(Middle, 2200), 3, 0, "slow release after a small move scrolls instead of clicking");
+        Equal(ScrollState.Normal, engine.State, "slow release ends the gesture");
+
+        engine.ButtonDown(Middle, 3000);
+        engine.Move(1, 0, 3010);
+        Equal(DecisionKind.Suppress, engine.ButtonUp(Middle, 3020).Kind, "jitter below the threshold still waits");
+        Equal(ScrollState.WaitingForSecondClick, engine.State, "jittery click can still lock");
     }
 
     private static void TimeReset()

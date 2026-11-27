@@ -5,7 +5,7 @@
 
 MarbleScroll was a really helpful Windows tray app for scrolling with a mouse or trackball. This is a cursed Frankenstein-esque impostor. The rest of this README might as well be a glorified AGENTS.md file. Honestly I don't mind if anyone finds this fork useful, but be mindful that I might tailor the default behavior based on my personal whims.
 
-Usage: Hold the middle button and move to scroll. Press and release it without crossing the movement threshold to open a link in a new tab, close a tab, or paste in an app that supports middle-click paste. Both side buttons work the same way by default. On Linux, the equivalent is [libinput's on-button-down scroll method](https://wayland.freedesktop.org/libinput/doc/latest/scrolling.html#on-button-scrolling).
+Usage: Hold the middle button and move to scroll. Press and release it without crossing the movement threshold, or quickly (within 200 ms) with less than 16 px of movement, to open a link in a new tab, close a tab, or paste in an app that supports middle-click paste. Both side buttons work the same way by default. On Linux, the equivalent is [libinput's on-button-down scroll method](https://wayland.freedesktop.org/libinput/doc/latest/scrolling.html#on-button-scrolling).
 
 ## Tray menu
 

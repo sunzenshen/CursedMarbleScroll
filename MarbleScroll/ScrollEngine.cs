@@ -55,6 +55,11 @@ namespace MarbleScroll
         public double HorizontalSensitivity { get; set; } = 1;
         public double VerticalSensitivity { get; set; } = 1;
         public double MovementThreshold { get; set; } = 2;
+        // A press released within ClickGraceMs that moved less than ClickSlop pixels is a click, not a
+        // scroll. Zero turns this off, so scrolling starts at MovementThreshold.
+        internal const double DefaultClickSlop = 16, DefaultClickGraceMs = 200;
+        public double ClickSlop { get; set; }
+        public double ClickGraceMs { get; set; } = DefaultClickGraceMs;
         internal const int DefaultLockWindowMs = 300;
         public int LockWindowMs { get; set; } = DefaultLockWindowMs;
 
@@ -67,7 +72,7 @@ namespace MarbleScroll
 
     internal sealed class ScrollEngine
     {
-        private readonly double horizontal, vertical, threshold, doubleClickMs;
+        private readonly double horizontal, vertical, threshold, doubleClickMs, clickSlop, clickGraceMs;
         private readonly bool acceleration;
         private readonly HashSet<ScrollButton> consumedDowns = new HashSet<ScrollButton>();
         private bool reverse, lockEnabled, snapToAxis;
@@ -107,6 +112,8 @@ namespace MarbleScroll
             vertical = Bound(settings.VerticalSensitivity, 0, 5, 1);
             threshold = Bound(settings.MovementThreshold, 0, 30, 2);
             doubleClickMs = ScrollSettings.BoundLockWindow(settings.LockWindowMs);
+            clickSlop = Bound(settings.ClickSlop, 0, 100, 0);
+            clickGraceMs = Bound(settings.ClickGraceMs, 0, 1000, ScrollSettings.DefaultClickGraceMs);
             reverse = settings.Reverse;
             acceleration = settings.Acceleration;
             lockEnabled = settings.LockEnabled;
@@ -189,12 +196,21 @@ namespace MarbleScroll
 
             if (IsTrigger(button))
             {
-                pendingX = pendingY = 0;
                 if (State == ScrollState.ButtonPressed)
                 {
+                    bool moved = travel >= threshold;
+                    if (moved && timeMs - firstDown >= clickGraceMs)
+                    {
+                        // Held past the grace period with no further motion: a small scroll, not a click.
+                        State = ScrollState.Normal;
+                        ScrollDecision flushed = FlushMotion(0, 0);
+                        return new ScrollDecision(DecisionKind.Scroll, flushed.XUnits, flushed.YUnits, replay);
+                    }
+                    pendingX = pendingY = 0;
                     State = ScrollState.WaitingForSecondClick;
                     travel = 0;
-                    if (!lockEnabled || timeMs - firstDown > doubleClickMs)
+                    // A click made while moving is headed elsewhere, so it does not wait for a second click.
+                    if (!lockEnabled || moved || timeMs - firstDown > doubleClickMs)
                         return FinishWaiting(DecisionKind.ReplayClick);
                 }
                 else if (State == ScrollState.TemporaryScroll)
@@ -202,6 +218,7 @@ namespace MarbleScroll
                     CaptureReleaseVelocity(timeMs);
                     State = ScrollState.Normal;
                 }
+                pendingX = pendingY = 0;
             }
             return new ScrollDecision(DecisionKind.Suppress, replayButton: replay);
         }
@@ -231,7 +248,7 @@ namespace MarbleScroll
                     motionY += Math.Abs(dy);
                     pendingX += dx;
                     pendingY += dy;
-                    if (travel < threshold)
+                    if (travel < threshold || (travel < clickSlop && timeMs - firstDown < clickGraceMs))
                         return new ScrollDecision(DecisionKind.Suppress);
                     State = ScrollState.TemporaryScroll;
                     return FlushMotion(0, 0);

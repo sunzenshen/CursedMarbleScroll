@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased
+## v1.1.3
+
+- A quick press that moves a little is now a click. A press released within 200 ms that moved less than 16 px replays a middle click at the press position, right away and without the lock wait. Scrolling starts once either limit is passed.
+
+## v1.1.2
 
 - A left or right click while scroll-locked now unlocks instead of clicking. The click and its release are not passed to the app.
 - Optional momentum: with **Momentum after a flick** enabled, releasing a hold-to-scroll while still moving keeps scrolling and decays to a stop. Clicks, wheel turns, and moving to another window stop it. Off by default.
